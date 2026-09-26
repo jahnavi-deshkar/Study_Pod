@@ -1,0 +1,312 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- Page Heading -->
+
+    <div class="mb-4">
+
+        <h2>Teacher Dashboard</h2>
+
+        <p class="text-muted">
+            Welcome, {{ request.user.get_full_name|default:request.user.username }}!
+        </p>
+
+    </div>
+
+
+    <!-- Dashboard Cards -->
+
+    <div class="row">
+
+
+        <!-- Notices -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Notices
+                    </h5>
+
+                    <p class="card-text">
+                        Create and manage notices for your classes.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'notices' %}"
+                            class="btn btn-primary"
+                        >
+                            Manage Notices
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Attendance -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Attendance
+                    </h5>
+
+                    <p class="card-text">
+                        Mark and manage attendance for your students.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'attendance' %}"
+                            class="btn btn-primary"
+                        >
+                            Manage Attendance
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- My Profile -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        My Profile
+                    </h5>
+
+                    <p class="card-text">
+                        View and manage your personal profile
+                        information.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'profile' %}"
+                            class="btn btn-primary"
+                        >
+                            View Profile
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Study Resources -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Study Resources
+                    </h5>
+
+                    <p class="card-text">
+                        Upload notes, documents, presentations,
+                        and other learning materials.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            disabled
+                        >
+                            Coming Soon
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Tests & Assignments -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Tests & Assignments
+                    </h5>
+
+                    <p class="card-text">
+                        Create tests, assignments,
+                        deadlines, and manage grades.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            disabled
+                        >
+                            Coming Soon
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Progress Dashboard -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Student Progress
+                    </h5>
+
+                    <p class="card-text">
+                        Monitor student performance,
+                        progress, and academic results.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            disabled
+                        >
+                            Coming Soon
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Doubts -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Student Doubts
+                    </h5>
+
+                    <p class="card-text">
+                        View and respond to questions
+                        raised by your students.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            disabled
+                        >
+                            Coming Soon
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Timetable -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Timetable
+                    </h5>
+
+                    <p class="card-text">
+                        View your teaching schedule,
+                        classes, and timetable.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            disabled
+                        >
+                            Coming Soon
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+    </div>
+
+</div>
+
+{% endblock %}

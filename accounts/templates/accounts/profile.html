@@ -1,0 +1,148 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}My Profile | StudyPod{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+
+    <div class="col-lg-8">
+
+        <div class="mb-4">
+            <h2 class="fw-bold">My Profile</h2>
+            <p class="text-muted">
+                Manage your StudyPod account information.
+            </p>
+        </div>
+
+
+        <div class="card shadow-sm">
+
+            <div class="card-body p-4">
+
+                <form method="post">
+
+                    {% csrf_token %}
+
+                    <h5 class="mb-3">Basic Information</h5>
+
+                    <div class="row">
+
+                        <div class="col-md-6 mb-3">
+
+                            <label class="form-label">
+                                First Name
+                            </label>
+
+                            {{ user_form.first_name }}
+
+                        </div>
+
+
+                        <div class="col-md-6 mb-3">
+
+                            <label class="form-label">
+                                Last Name
+                            </label>
+
+                            {{ user_form.last_name }}
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="mb-4">
+
+                        <label class="form-label">
+                            Email Address
+                        </label>
+
+                        {{ user_form.email }}
+
+                    </div>
+
+
+                    <h5 class="mb-3">
+                        Role Information
+                    </h5>
+
+                    {% if request.user.role == "TEACHER" %}
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Department
+                            </label>
+
+                            {{ profile_form.department }}
+
+                        </div>
+
+                        <div class="alert alert-secondary">
+                            Employee ID:
+                            <strong>
+                                {{ request.user.teacher_profile.employee_id }}
+                            </strong>
+                        </div>
+
+                    {% elif request.user.role == "STUDENT" %}
+
+                        <div class="alert alert-secondary">
+
+                            <p class="mb-1">
+                                Roll Number:
+                                <strong>
+                                    {{ request.user.student_profile.roll_number }}
+                                </strong>
+                            </p>
+
+                            <p class="mb-1">
+                                Class:
+                                <strong>
+                                    {{ request.user.student_profile.student_class }}
+                                </strong>
+                            </p>
+
+                            <p class="mb-0">
+                                Parent:
+                                <strong>
+                                    {{ request.user.student_profile.parent }}
+                                </strong>
+                            </p>
+
+                        </div>
+
+                    {% elif request.user.role == "PARENT" %}
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Phone Number
+                            </label>
+
+                            {{ profile_form.phone }}
+
+                        </div>
+
+                    {% endif %}
+
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        Save Changes
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

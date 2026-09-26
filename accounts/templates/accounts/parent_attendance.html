@@ -1,0 +1,178 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <h2 class="mb-4">Children's Attendance</h2>
+
+    {% if student_data %}
+
+        {% for data in student_data %}
+
+            <div class="card shadow-sm mb-4">
+
+                <div class="card-body">
+
+                    <h4 class="mb-3">
+                        {{ data.student.user.get_full_name|default:data.student.user.username }}
+                    </h4>
+
+                    <p class="text-muted">
+                        Roll No: {{ data.student.roll_number }}
+                    </p>
+
+
+                    <!-- Summary -->
+
+                    <div class="row mb-4">
+
+                        <div class="col-md-4 mb-3">
+
+                            <div class="card">
+
+                                <div class="card-body text-center">
+
+                                    <h6 class="text-muted">
+                                        Total Classes
+                                    </h6>
+
+                                    <h3>
+                                        {{ data.total_days }}
+                                    </h3>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4 mb-3">
+
+                            <div class="card">
+
+                                <div class="card-body text-center">
+
+                                    <h6 class="text-muted">
+                                        Present
+                                    </h6>
+
+                                    <h3>
+                                        {{ data.present_days }}
+                                    </h3>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4 mb-3">
+
+                            <div class="card">
+
+                                <div class="card-body text-center">
+
+                                    <h6 class="text-muted">
+                                        Attendance
+                                    </h6>
+
+                                    <h3>
+                                        {{ data.attendance_percentage|floatformat:2 }}%
+                                    </h3>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- Attendance History -->
+
+                    {% if data.records %}
+
+                        <h5 class="mb-3">
+                            Attendance History
+                        </h5>
+
+                        <div class="table-responsive">
+
+                            <table class="table table-bordered">
+
+                                <thead>
+
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    {% for record in data.records %}
+
+                                        <tr>
+
+                                            <td>
+                                                {{ record.date|date:"d M Y" }}
+                                            </td>
+
+                                            <td>
+
+                                                {% if record.is_present %}
+
+                                                    <span class="badge bg-success">
+                                                        Present
+                                                    </span>
+
+                                                {% else %}
+
+                                                    <span class="badge bg-danger">
+                                                        Absent
+                                                    </span>
+
+                                                {% endif %}
+
+                                            </td>
+
+                                        </tr>
+
+                                    {% endfor %}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    {% else %}
+
+                        <div class="alert alert-info">
+                            No attendance records available for this student.
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="alert alert-info">
+            No students are linked to this parent account.
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

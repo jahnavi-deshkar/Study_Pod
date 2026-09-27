@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Add Question - {{ assessment.title }}
+    </title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        body {
+            background-color: #f5f7fb;
+        }
+
+        .page-container {
+            max-width: 1000px;
+            margin: 40px auto;
+        }
+
+        .question-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .question-number {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .question-type-section {
+            display: none;
+        }
+
+        .option-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .option-row input[type="text"] {
+            flex: 1;
+        }
+
+        .image-preview {
+            max-width: 180px;
+            max-height: 140px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .button-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .button-left,
+        .button-right {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container page-container">
+
+    <!-- Page heading -->
+
+    <div class="mb-4">
+
+        <h1 class="fw-bold">
+            Add Questions
+        </h1>
+
+        <p class="text-muted mb-1">
+            {{ assessment.title }}
+        </p>
+
+        <p class="text-muted">
+            {{ assessment.subject }} |
+            {{ assessment.student_class }}
+        </p>
+
+    </div>
+
+
+    <!-- Question form -->
+
+    <div class="question-card">
+
+        <!-- IMPORTANT:
+             question_number comes from Django.
+             It automatically becomes Question 1,
+             Question 2, Question 3, etc.
+        -->
+
+        <div class="question-number">
+
+            Question {{ question_number }}
+
+        </div>
+
+
+        <form
+            method="POST"
+            enctype="multipart/form-data"
+        >
+
+            {% csrf_token %}
+
+
+            <!-- Question text -->
+
+            <div class="mb-4">
+
+                <label class="section-title">
+                    Question
+                </label>
+
+                <textarea
+                    name="question_text"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Enter your question here..."
+                    required
+                ></textarea>
+
+            </div>
+
+
+            <!-- Images -->
+
+            <div class="mb-4">
+
+                <label class="section-title">
+                    Question Image(s) / Diagram
+                </label>
+
+                <p class="text-muted small">
+                    Add one or more images if this question contains
+                    a diagram, graph, figure, circuit, geometry drawing,
+                    or other visual material.
+                </p>
+
+                <input
+                    type="file"
+                    name="question_images"
+                    id="questionImages"
+                    class="form-control"
+                    accept="image/*"
+                    multiple
+                >
+
+                <div
+                    id="imagePreviewContainer"
+                    class="mt-3"
+                ></div>
+
+            </div>
+
+
+            <!-- Question type -->
+
+            <div class="mb-4">
+
+                <label class="section-title">
+                    Question Type
+                </label>
+
+                <select
+                    name="question_type"
+                    id="questionType"
+                    class="form-select"
+                    required
+                >
+
+                    <option value="">
+                        Select question type
+                    </option>
+
+                    <option value="MCQ_SINGLE">
+                        MCQ - Single Correct
+                    </option>
+
+                    <option value="MCQ_MULTI">
+                        MCQ - Multiple Correct
+                    </option>
+
+                    <option value="TRUE_FALSE">
+                        True / False
+                    </option>
+
+                    <option value="NUMERICAL">
+                        Numerical
+                    </option>
+
+                    <option value="SHORT_ANSWER">
+                        Short Answer
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- Marks and negative marking -->
+
+            <div class="row mb-4">
+
+                <div class="col-md-4">
+
+                    <label class="section-title">
+                        Marks
+                    </label>
+
+                    <input
+                        type="number"
+                        name="marks"
+                        class="form-control"
+                        value="1"
+                        min="1"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="col-md-8">
+
+                    <label class="section-title">
+                        Negative Marking
+                    </label>
+
+                    <div class="form-check mt-2">
+
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="negative_marking"
+                            id="negativeMarking"
+                        >
+
+                        <label
+                            class="form-check-label"
+                            for="negativeMarking"
+                        >
+                            Enable negative marking for this question
+                        </label>
+
+                    </div>
+
+                    <div
+                        id="negativeMarksContainer"
+                        class="mt-2"
+                        style="display:none;"
+                    >
+
+                        <input
+                            type="number"
+                            name="negative_marks"
+                            class="form-control"
+                            step="0.01"
+                            min="0"
+                            placeholder="Negative marks"
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Per-question timing -->
+
+            {% if assessment.timing_mode == "PER_QUESTION" %}
+
+                <div class="alert alert-info">
+
+                    <strong>Per-question timing</strong>
+
+                    <p class="mb-2 mt-1">
+                        Set the time allowed for this question.
+                    </p>
+
+                    <div class="row">
+
+                        <div class="col-md-6">
+
+                            <label class="form-label">
+                                Hours
+                            </label>
+
+                            <input
+                                type="number"
+                                name="time_limit_hours"
+                                class="form-control"
+                                value="0"
+                                min="0"
+                            >
+
+                        </div>
+
+                        <div class="col-md-6">
+
+                            <label class="form-label">
+                                Minutes
+                            </label>
+
+                            <input
+                                type="number"
+                                name="time_limit_minutes"
+                                class="form-control"
+                                value="0"
+                                min="0"
+                                max="59"
+                            >
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+
+            <!-- MCQ section -->
+
+            <div
+                id="mcqSection"
+                class="question-type-section mb-4"
+            >
+
+                <h5 class="fw-bold">
+                    Answer Options
+                </h5>
+
+                <p class="text-muted small">
+
+                    Add at least two options and select the correct answer.
+
+                </p>
+
+                <div id="optionsContainer">
+
+                    <div class="option-row">
+
+                        <div class="form-check correct-choice">
+
+                            <input
+                                type="checkbox"
+                                name="correct_option"
+                                value="0"
+                                class="form-check-input correct-option"
+                            >
+
+                            <label class="form-check-label">
+                                Correct
+                            </label>
+
+                        </div>
+
+                        <input
+                            type="text"
+                            name="option_text"
+                            class="form-control"
+                            placeholder="Option 1"
+                        >
+
+                    </div>
+
+
+
+                    <div class="option-row">
+
+                        <div class="form-check correct-choice">
+
+                            <input
+                                type="checkbox"
+                                name="correct_option"
+                                value="0"
+                                class="form-check-input correct-option"
+                            >
+
+                            <label class="form-check-label">
+                                Correct
+                            </label>
+
+                        </div>
+
+                        <input
+                            type="text"
+                            name="option_text"
+                            class="form-control"
+                            placeholder="Option 1"
+                        >
+
+                    </div>
+
+
+                    <div class="option-row">
+
+                        <div class="form-check correct-choice">
+
+                            <input
+                                type="checkbox"
+                                name="correct_option"
+                                value="0"
+                                class="form-check-input correct-option"
+                            >
+
+                            <label class="form-check-label">
+                                Correct
+                            </label>
+
+                        </div>
+
+                        <input
+                            type="text"
+                            name="option_text"
+                            class="form-control"
+                            placeholder="Option 1"
+                        >
+
+                    </div>
+                </div>
+
+
+                <button
+                    type="button"
+                    id="addOptionButton"
+                    class="btn btn-outline-primary btn-sm mt-2"
+                >
+                    + Add Option
+                </button>
+
+            </div>
+
+
+            <!-- True / False section -->
+
+            <div
+                id="trueFalseSection"
+                class="question-type-section mb-4"
+            >
+
+                <h5 class="fw-bold">
+                    Correct Answer
+                </h5>
+
+                <select
+                    name="true_false_answer"
+                    class="form-select"
+                >
+
+                    <option value="">
+                        Select correct answer
+                    </option>
+
+                    <option value="True">
+                        True
+                    </option>
+
+                    <option value="False">
+                        False
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- Numerical section -->
+
+            <div
+                id="numericalSection"
+                class="question-type-section mb-4"
+            >
+
+                <h5 class="fw-bold">
+                    Correct Numerical Answer
+                </h5>
+
+                <input
+                    type="text"
+                    name="numerical_answer"
+                    class="form-control"
+                    placeholder="Enter correct numerical answer"
+                >
+
+            </div>
+
+
+            <!-- Short answer section -->
+
+            <div
+                id="shortAnswerSection"
+                class="question-type-section mb-4"
+            >
+
+                <h5 class="fw-bold">
+                    Expected Answer
+                </h5>
+
+                <textarea
+                    name="short_answer"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Enter the expected answer"
+                ></textarea>
+
+            </div>
+
+
+            <!-- BUTTONS -->
+
+            <hr class="my-4">
+
+
+            <div class="button-row">
+
+                <!-- Back to Tests -->
+
+                <div class="button-left">
+
+                    <a
+                        href="{% url 'test_management' %}"
+                        class="btn btn-outline-secondary"
+                    >
+                        ← Back to Tests
+                    </a>
+
+                </div>
+
+
+                <!-- Save / Complete -->
+
+                <div class="button-right">
+
+                    <button
+                        type="submit"
+                        name="action"
+                        value="next"
+                        class="btn btn-primary"
+                    >
+                        Save Question & Next Question
+                    </button>
+
+
+                    <button
+                        type="submit"
+                        name="action"
+                        value="complete"
+                        class="btn btn-success"
+                    >
+                        Complete Test Making
+                    </button>
+
+                </div>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<script>
+
+    // --------------------------------------------------
+    // Question type sections
+    // --------------------------------------------------
+
+    const questionType =
+        document.getElementById("questionType");
+
+    const mcqSection =
+        document.getElementById("mcqSection");
+
+    const trueFalseSection =
+        document.getElementById("trueFalseSection");
+
+    const numericalSection =
+        document.getElementById("numericalSection");
+
+    const shortAnswerSection =
+        document.getElementById("shortAnswerSection");
+
+
+    function updateQuestionType() {
+
+        mcqSection.style.display = "none";
+
+        trueFalseSection.style.display = "none";
+
+        numericalSection.style.display = "none";
+
+        shortAnswerSection.style.display = "none";
+
+
+        if (
+            questionType.value === "MCQ_SINGLE" ||
+            questionType.value === "MCQ_MULTI"
+        ) {
+
+            mcqSection.style.display = "block";
+
+        }
+
+
+        if (
+            questionType.value === "TRUE_FALSE"
+        ) {
+
+            trueFalseSection.style.display = "block";
+
+        }
+
+
+        if (
+            questionType.value === "NUMERICAL"
+        ) {
+
+            numericalSection.style.display = "block";
+
+        }
+
+
+        if (
+            questionType.value === "SHORT_ANSWER"
+        ) {
+
+            shortAnswerSection.style.display = "block";
+
+        }
+
+    }
+
+
+    questionType.addEventListener(
+        "change",
+        updateQuestionType
+    );
+
+
+    // --------------------------------------------------
+    // Negative marking
+    // --------------------------------------------------
+
+    const negativeMarking =
+        document.getElementById("negativeMarking");
+
+    const negativeMarksContainer =
+        document.getElementById("negativeMarksContainer");
+
+
+    negativeMarking.addEventListener(
+        "change",
+        function () {
+
+            if (this.checked) {
+
+                negativeMarksContainer.style.display =
+                    "block";
+
+            } else {
+
+                negativeMarksContainer.style.display =
+                    "none";
+
+            }
+
+        }
+    );
+
+
+    // --------------------------------------------------
+    // MCQ single / multiple correct behaviour
+    // --------------------------------------------------
+
+    function updateCorrectOptionBehaviour() {
+
+        const options =
+            document.querySelectorAll(
+                ".correct-option"
+            );
+
+
+        if (
+            questionType.value === "MCQ_SINGLE"
+        ) {
+
+            options.forEach(function(option) {
+
+                option.type = "radio";
+
+                option.name = "correct_option";
+
+            });
+
+        } else {
+
+            options.forEach(function(option) {
+
+                option.type = "checkbox";
+
+                option.name = "correct_option";
+
+            });
+
+        }
+
+    }
+
+
+    questionType.addEventListener(
+        "change",
+        updateCorrectOptionBehaviour
+    );
+
+
+    // --------------------------------------------------
+    // Add MCQ option
+    // --------------------------------------------------
+
+    const addOptionButton =
+        document.getElementById("addOptionButton");
+
+    const optionsContainer =
+        document.getElementById("optionsContainer");
+
+
+    addOptionButton.addEventListener(
+        "click",
+        function () {
+
+            const optionRows =
+                optionsContainer.querySelectorAll(
+                    ".option-row"
+                );
+
+            const optionNumber =
+                optionRows.length + 1;
+
+            const optionIndex =
+                optionRows.length;
+
+
+            const row =
+                document.createElement("div");
+
+            row.className =
+                "option-row";
+
+
+            row.innerHTML = `
+
+                <input
+                    type="text"
+                    name="option_text"
+                    class="form-control"
+                    placeholder="Option ${optionNumber}"
+                >
+
+                <div class="form-check">
+
+                    <input
+                        type="checkbox"
+                        name="correct_option"
+                        value="${optionIndex}"
+                        class="form-check-input correct-option"
+                    >
+
+                    <label class="form-check-label">
+                        Correct
+                    </label>
+
+                </div>
+
+                <button
+                    type="button"
+                    class="btn btn-outline-danger btn-sm remove-option"
+                >
+                    Remove
+                </button>
+
+            `;
+
+
+            optionsContainer.appendChild(row);
+
+
+            updateCorrectOptionBehaviour();
+
+        }
+    );
+
+
+    // --------------------------------------------------
+    // Remove MCQ option
+    // --------------------------------------------------
+
+    optionsContainer.addEventListener(
+        "click",
+        function(event) {
+
+            if (
+                event.target.classList.contains(
+                    "remove-option"
+                )
+            ) {
+
+                event.target
+                    .closest(".option-row")
+                    .remove();
+
+
+                renumberOptions();
+
+            }
+
+        }
+    );
+
+
+    function renumberOptions() {
+
+        const rows =
+            optionsContainer.querySelectorAll(
+                ".option-row"
+            );
+
+
+        rows.forEach(
+            function(row, index) {
+
+                const input =
+                    row.querySelector(
+                        'input[name="option_text"]'
+                    );
+
+                const correct =
+                    row.querySelector(
+                        ".correct-option"
+                    );
+
+
+                input.placeholder =
+                    `Option ${index + 1}`;
+
+
+                correct.value =
+                    index;
+
+            }
+        );
+
+    }
+
+
+    // --------------------------------------------------
+    // Image previews
+    // --------------------------------------------------
+
+    const questionImages =
+        document.getElementById("questionImages");
+
+    const imagePreviewContainer =
+        document.getElementById(
+            "imagePreviewContainer"
+        );
+
+
+    questionImages.addEventListener(
+        "change",
+        function() {
+
+            imagePreviewContainer.innerHTML =
+                "";
+
+
+            Array.from(
+                this.files
+            ).forEach(
+                function(file) {
+
+                    const reader =
+                        new FileReader();
+
+
+                    reader.onload =
+                        function(event) {
+
+                            const image =
+                                document.createElement(
+                                    "img"
+                                );
+
+
+                            image.src =
+                                event.target.result;
+
+
+                            image.className =
+                                "image-preview";
+
+
+                            imagePreviewContainer
+                                .appendChild(
+                                    image
+                                );
+
+                        };
+
+
+                    reader.readAsDataURL(
+                        file
+                    );
+
+                }
+            );
+
+        }
+    );
+
+</script>
+
+</body>
+
+</html>

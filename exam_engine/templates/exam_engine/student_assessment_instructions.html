@@ -1,0 +1,233 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <div class="row justify-content-center">
+
+        <div class="col-lg-8">
+
+            <div class="card shadow-sm">
+
+                <div class="card-body p-4">
+
+                    <div class="mb-4">
+
+                        {% if assessment.assessment_type == "TEST" %}
+
+                            <span class="badge bg-primary">
+                                Test
+                            </span>
+
+                        {% else %}
+
+                            <span class="badge bg-secondary">
+                                Assignment
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <h2 class="mb-2">
+                        {{ assessment.title }}
+                    </h2>
+
+
+                    <p class="text-muted mb-4">
+                        {{ assessment.subject.name }}
+                    </p>
+
+
+                    {% if assessment.description %}
+
+                        <div class="mb-4">
+
+                            <h5>
+                                Description
+                            </h5>
+
+                            <p class="text-muted">
+                                {{ assessment.description }}
+                            </p>
+
+                        </div>
+
+                    {% endif %}
+
+
+                    <h5 class="mb-3">
+                        Assessment Details
+                    </h5>
+
+
+                    <div class="row g-3 mb-4">
+
+                        <div class="col-md-6">
+
+                            <div class="border rounded p-3">
+
+                                <small class="text-muted">
+                                    Total Questions
+                                </small>
+
+                                <div class="fs-5 fw-semibold">
+                                    {{ question_count }}
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-6">
+
+                            <div class="border rounded p-3">
+
+                                <small class="text-muted">
+                                    Total Marks
+                                </small>
+
+                                <div class="fs-5 fw-semibold">
+                                    {{ assessment.total_marks }}
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-6">
+
+                            <div class="border rounded p-3">
+
+                                <small class="text-muted">
+                                    Timing
+                                </small>
+
+                                <div class="fs-5 fw-semibold">
+
+                                    {% if assessment.timing_mode == "NONE" %}
+
+                                        No Time Limit
+
+                                    {% elif assessment.timing_mode == "ENTIRE_TEST" %}
+
+                                        {{ assessment.duration_hours }}h
+                                        {{ assessment.duration_minutes }}m
+
+                                    {% elif assessment.timing_mode == "PER_QUESTION" %}
+
+                                        Per Question
+
+                                    {% endif %}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-6">
+
+                            <div class="border rounded p-3">
+
+                                <small class="text-muted">
+                                    Teacher
+                                </small>
+
+                                <div class="fs-5 fw-semibold">
+                                    {{ assessment.teacher }}
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    {% if assessment.available_from %}
+
+                        <div class="alert alert-info">
+
+                            <strong>Available From:</strong>
+
+                            {{ assessment.available_from|date:"d M Y, H:i" }}
+
+                        </div>
+
+                    {% endif %}
+
+
+                    {% if assessment.due_date %}
+
+                        <div class="alert alert-warning">
+
+                            <strong>Due Date:</strong>
+
+                            {{ assessment.due_date|date:"d M Y, H:i" }}
+
+                        </div>
+
+                    {% endif %}
+
+
+                    <div class="alert alert-light border">
+
+                        <h6>
+                            Before you begin
+                        </h6>
+
+                        <ul class="mb-0">
+
+                            <li>
+                                Make sure you have enough time to complete the assessment.
+                            </li>
+
+                            <li>
+                                Read each question carefully before answering.
+                            </li>
+
+                            <li>
+                                Once the assessment is submitted, you may not be able to change your answers.
+                            </li>
+
+                        </ul>
+
+                    </div>
+
+
+                    <div class="d-flex justify-content-between mt-4">
+
+                        <a
+                            href="{% url 'student_assessments' %}"
+                            class="btn btn-outline-secondary"
+                        >
+                            Back
+                        </a>
+
+
+                        <a
+                            href="{% url 'student_test' assessment.id %}"
+                            class="btn btn-primary"
+                        >
+                            Start Test
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

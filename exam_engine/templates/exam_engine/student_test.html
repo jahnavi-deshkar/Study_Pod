@@ -1,0 +1,247 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h2>{{ assessment.title }}</h2>
+
+            <p class="text-muted mb-0">
+                {{ assessment.subject.name }}
+            </p>
+        </div>
+
+        <div class="text-end">
+            <div class="text-muted">
+                Question
+            </div>
+
+            <strong>
+                {{ question_number }} / {{ question_count }}
+            </strong>
+        </div>
+
+    </div>
+
+
+    <div class="card shadow-sm">
+
+        <div class="card-body p-4">
+
+            <div class="mb-4">
+
+                <span class="badge bg-primary">
+                    {{ question.get_question_type_display }}
+                </span>
+
+                <span class="badge bg-secondary">
+                    {{ question.marks }} marks
+                </span>
+
+            </div>
+
+
+            <h4 class="mb-4">
+                {{ question.question_text }}
+            </h4>
+
+
+            {% for image in question.images.all %}
+
+                <div class="mb-4">
+
+                    <img
+                        src="{{ image.image.url }}"
+                        class="img-fluid rounded mb-3"
+                        alt="Question image"
+                    >
+
+                </div>
+
+            {% endfor %}
+
+
+            <form method="post">
+                <input
+                    type="hidden"
+                    name="question_number"
+                    value="{{ question_number }}"
+                >
+
+                {% csrf_token %}
+
+
+                {% if question.question_type == "MCQ_SINGLE" %}
+
+                    {% for option in question.options.all %}
+
+                        <div class="form-check border rounded p-3 mb-2">
+
+                            <input
+                                class="form-check-input ms-0 me-2"
+                                type="radio"
+                                name="answer"
+                                value="{{ option.id }}"
+                                id="option{{ option.id }}"
+                                {% if existing_answer.selected_option_id == option.id %}
+                                    checked
+                                {% endif %}
+                            >
+
+                            <label
+                                class="form-check-label"
+                                for="option{{ option.id }}"
+                            >
+                                {{ option.option_text }}
+                            </label>
+
+                        </div>
+
+                    {% endfor %}
+
+
+                {% elif question.question_type == "MCQ_MULTI" %}
+
+                    {% for option in question.options.all %}
+
+                        <div class="form-check border rounded p-3 mb-2">
+
+                            <input
+                                class="form-check-input ms-0 me-2"
+                                type="checkbox"
+                                name="answer"
+                                value="{{ option.id }}"
+                                id="option{{ option.id }}"
+                            >
+
+                            <label
+                                class="form-check-label"
+                                for="option{{ option.id }}"
+                            >
+                                {{ option.option_text }}
+                            </label>
+
+                        </div>
+
+                    {% endfor %}
+
+
+                {% elif question.question_type == "TRUE_FALSE" %}
+
+                    <div class="form-check border rounded p-3 mb-2">
+
+                        <input
+                            class="form-check-input ms-0 me-2"
+                            type="radio"
+                            name="answer"
+                            value="True"
+                            id="true"
+                        >
+
+                        <label
+                            class="form-check-label"
+                            for="true"
+                        >
+                            True
+                        </label>
+
+                    </div>
+
+
+                    <div class="form-check border rounded p-3 mb-2">
+
+                        <input
+                            class="form-check-input ms-0 me-2"
+                            type="radio"
+                            name="answer"
+                            value="False"
+                            id="false"
+                        >
+
+                        <label
+                            class="form-check-label"
+                            for="false"
+                        >
+                            False
+                        </label>
+
+                    </div>
+
+
+                {% elif question.question_type == "NUMERICAL" %}
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+                            Your Answer
+                        </label>
+
+                        <input
+                            type="number"
+                            class="form-control"
+                            name="answer"
+                            value="{{ existing_answer.answer_text|default:'' }}"
+                        >
+
+                    </div>
+
+
+                {% elif question.question_type == "SHORT_ANSWER" %}
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+                            Your Answer
+                        </label>
+
+                        <textarea
+                            class="form-control"
+                            rows="5"
+                            name="answer"
+                        >{{ existing_answer.answer_text|default:'' }}</textarea>
+
+                    </div>
+
+                {% endif %}
+
+
+                <hr class="my-4">
+
+
+                <div class="d-flex justify-content-between">
+
+                    <a
+                        href="{% url 'student_assessments' %}"
+                        class="btn btn-outline-secondary"
+                    >
+                        Exit Test
+                    </a>
+
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+
+                        {% if question_number == question_count %}
+                            Submit Test
+                        {% else %}
+                            Save & Next
+                        {% endif %}
+
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

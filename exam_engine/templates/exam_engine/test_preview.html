@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Test Preview - {{ assessment.title }}</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+        body {
+            background-color: #f5f7fb;
+        }
+
+        .preview-container {
+            max-width: 1000px;
+            margin: 40px auto;
+        }
+
+        .question-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .question-number {
+            font-weight: 700;
+            font-size: 20px;
+        }
+
+        .option-box {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+        }
+
+        .correct-option {
+            border-left: 5px solid #198754;
+            background-color: #f0fff7;
+        }
+
+        .question-image {
+            max-width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container preview-container">
+
+    <!-- Page heading -->
+    <div class="mb-4">
+
+        <h1 class="fw-bold">
+            Test Preview
+        </h1>
+
+        <p class="text-muted">
+            Review your test before making it available to students.
+        </p>
+
+    </div>
+
+
+    <!-- Assessment summary -->
+    <div class="summary-card">
+
+        <h2 class="fw-bold mb-3">
+            {{ assessment.title }}
+        </h2>
+
+        {% if assessment.description %}
+            <p class="text-muted">
+                {{ assessment.description }}
+            </p>
+        {% endif %}
+
+        <hr>
+
+        <div class="row">
+
+            <div class="col-md-4 mb-3">
+                <strong>Class</strong>
+                <br>
+                {{ assessment.student_class }}
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <strong>Subject</strong>
+                <br>
+                {{ assessment.subject }}
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <strong>Type</strong>
+                <br>
+                {{ assessment.get_assessment_type_display }}
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <strong>Questions</strong>
+                <br>
+                {{ question_count }}
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <strong>Configured Total Marks</strong>
+                <br>
+                {{ assessment.total_marks }}
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <strong>Calculated Question Marks</strong>
+                <br>
+                {{ calculated_total_marks }}
+            </div>
+
+        </div>
+
+        <hr>
+
+        <h5 class="fw-bold">
+            Timing
+        </h5>
+
+        {% if assessment.timing_mode == "NONE" %}
+
+            <span class="badge bg-secondary">
+                No Time Limit
+            </span>
+
+        {% elif assessment.timing_mode == "ENTIRE_TEST" %}
+
+            <p class="mb-0">
+                <strong>Entire Test:</strong>
+
+                {{ assessment.duration_hours }} hour(s)
+                {{ assessment.duration_minutes }} minute(s)
+            </p>
+
+        {% elif assessment.timing_mode == "PER_QUESTION" %}
+
+            <p class="mb-0">
+                <strong>Per Question:</strong>
+                Each question may have its own time limit.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- Questions -->
+    <div class="mb-3">
+
+        <h3 class="fw-bold">
+            Questions
+        </h3>
+
+    </div>
+
+
+    {% if questions %}
+
+        {% for question in questions %}
+
+            <div class="question-card">
+
+                <div class="d-flex justify-content-between align-items-start mb-3">
+
+                    <div class="question-number">
+                        Question {{ question.order }}
+                    </div>
+
+                    <span class="badge bg-primary">
+                        {{ question.marks }} mark{{ question.marks|pluralize }}
+                    </span>
+
+                </div>
+
+
+                <!-- Question type -->
+                <div class="mb-3">
+
+                    <span class="badge bg-light text-dark border">
+                        {{ question.get_question_type_display }}
+                    </span>
+
+                    {% if question.negative_marking %}
+
+                        <span class="badge bg-warning text-dark">
+                            Negative marking:
+                            -{{ question.negative_marks }}
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+
+                <!-- Per-question timing -->
+                {% if assessment.timing_mode == "PER_QUESTION" %}
+
+                    {% if question.time_limit_hours or question.time_limit_minutes %}
+
+                        <div class="alert alert-info py-2">
+
+                            <strong>Time limit:</strong>
+
+                            {{ question.time_limit_hours }} hour(s)
+                            {{ question.time_limit_minutes }} minute(s)
+
+                        </div>
+
+                    {% endif %}
+
+                {% endif %}
+
+
+                <!-- Question text -->
+                <div class="fs-5 mb-3">
+
+                    {{ question.question_text|linebreaks }}
+
+                </div>
+
+
+                <!-- Question images -->
+                {% if question.images.all %}
+
+                    <div class="mb-3">
+
+                        {% for image in question.images.all %}
+
+                            <div class="mb-3">
+
+                                <img
+                                    src="{{ image.image.url }}"
+                                    alt="Question image"
+                                    class="question-image"
+                                >
+
+                                {% if image.caption %}
+
+                                    <div class="text-muted small mt-1">
+                                        {{ image.caption }}
+                                    </div>
+
+                                {% endif %}
+
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                {% endif %}
+
+
+                <!-- MCQ options -->
+                {% if question.question_type == "MCQ_SINGLE" or question.question_type == "MCQ_MULTI" %}
+
+                    <div class="mb-3">
+
+                        {% for option in question.options.all %}
+
+                            <div
+                                class="
+                                    option-box
+                                    {% if option.is_correct %}
+                                        correct-option
+                                    {% endif %}
+                                "
+                            >
+
+                                <strong>
+                                    {{ forloop.counter }}.
+                                </strong>
+
+                                {{ option.option_text }}
+
+                                {% if option.is_correct %}
+
+                                    <span class="badge bg-success float-end">
+                                        Correct
+                                    </span>
+
+                                {% endif %}
+
+                            </div>
+
+                        {% empty %}
+
+                            <div class="text-muted">
+                                No options added.
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                {% endif %}
+
+
+                <!-- True / False -->
+                {% if question.question_type == "TRUE_FALSE" %}
+
+                    <div class="mb-3">
+
+                        <div class="option-box">
+                            True
+                        </div>
+
+                        <div class="option-box">
+                            False
+                        </div>
+
+                    </div>
+
+                    <div class="alert alert-success">
+
+                        <strong>Correct answer:</strong>
+                        {{ question.correct_answer }}
+
+                    </div>
+
+                {% endif %}
+
+
+                <!-- Numerical -->
+                {% if question.question_type == "NUMERICAL" %}
+
+                    <div class="alert alert-success">
+
+                        <strong>Correct answer:</strong>
+                        {{ question.correct_answer }}
+
+                    </div>
+
+                {% endif %}
+
+
+                <!-- Short answer -->
+                {% if question.question_type == "SHORT_ANSWER" %}
+
+                    <div class="alert alert-success">
+
+                        <strong>Expected answer:</strong>
+
+                        <div class="mt-2">
+                            {{ question.correct_answer|linebreaks }}
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+
+                <!-- Explanation -->
+                {% if question.explanation %}
+
+                    <div class="alert alert-secondary">
+
+                        <strong>Explanation:</strong>
+
+                        <div class="mt-2">
+                            {{ question.explanation|linebreaks }}
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="alert alert-warning">
+
+            No questions have been added to this test yet.
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- Bottom actions -->
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-5">
+
+        <a
+            href="{% url 'test_management' %}"
+            class="btn btn-outline-secondary"
+        >
+            ← Back to Tests
+        </a>
+
+        <a
+            href="{% url 'question_create' assessment.id %}"
+            class="btn btn-primary"
+        >
+            Add Another Question
+        </a>
+
+    </div>
+
+</div>
+
+</body>
+</html>

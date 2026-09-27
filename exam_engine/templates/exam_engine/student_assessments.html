@@ -1,0 +1,151 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h2>Tests & Assignments</h2>
+
+            <p class="text-muted mb-0">
+                View assessments assigned to your class.
+            </p>
+        </div>
+
+        <a
+            href="{% url 'dashboard' %}"
+            class="btn btn-outline-primary"
+        >
+            Back to Dashboard
+        </a>
+
+    </div>
+
+
+    {% if assessments %}
+
+        <div class="row">
+
+            {% for assessment in assessments %}
+
+                <div class="col-md-6 col-lg-4 mb-4">
+
+                    <div class="card shadow-sm h-100">
+
+                        <div class="card-body d-flex flex-column">
+
+                            <div class="mb-3">
+
+                                {% if assessment.assessment_type == "TEST" %}
+
+                                    <span class="badge bg-primary">
+                                        Test
+                                    </span>
+
+                                {% else %}
+
+                                    <span class="badge bg-secondary">
+                                        Assignment
+                                    </span>
+
+                                {% endif %}
+
+                            </div>
+
+
+                            <h5 class="card-title">
+                                {{ assessment.title }}
+                            </h5>
+
+
+                            <p class="text-muted mb-2">
+                                <strong>Subject:</strong>
+                                {{ assessment.subject.name }}
+                            </p>
+
+
+                            <p class="text-muted mb-2">
+                                <strong>Teacher:</strong>
+                                {{ assessment.teacher }}
+                            </p>
+
+
+                            <p class="text-muted mb-2">
+                                <strong>Total Marks:</strong>
+                                {{ assessment.total_marks }}
+                            </p>
+
+
+                            {% if assessment.available_from %}
+
+                                <p class="text-muted mb-2">
+                                    <strong>Available From:</strong>
+                                    {{ assessment.available_from|date:"d M Y, H:i" }}
+                                </p>
+
+                            {% endif %}
+
+
+                            {% if assessment.due_date %}
+
+                                <p class="text-muted mb-3">
+                                    <strong>Due:</strong>
+                                    {{ assessment.due_date|date:"d M Y, H:i" }}
+                                </p>
+
+                            {% endif %}
+
+
+                            {% if assessment.description %}
+
+                                <p class="card-text">
+                                    {{ assessment.description }}
+                                </p>
+
+                            {% endif %}
+
+
+                            <div class="mt-auto pt-3">
+
+                                <a
+                                    href="{% url 'student_assessment_instructions' assessment.id %}"
+                                    class="btn btn-primary w-100"
+                                >
+                                    Start Test
+                                </a>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="card shadow-sm">
+
+            <div class="card-body text-center py-5">
+
+                <h5>No Tests or Assignments</h5>
+
+                <p class="text-muted mb-0">
+                    There are currently no assessments assigned to your class.
+                </p>
+
+            </div>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

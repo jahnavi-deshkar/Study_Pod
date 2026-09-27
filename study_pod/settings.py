@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'accounts',
     'academics',
+    'exam_engine'
 ]
 
 MIDDLEWARE = [

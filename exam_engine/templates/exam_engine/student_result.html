@@ -1,0 +1,389 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- Header -->
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h2>{{ assessment.title }}</h2>
+
+            <p class="text-muted mb-0">
+                {{ assessment.subject.name }}
+            </p>
+        </div>
+
+        <span class="badge bg-success fs-6">
+            Submitted
+        </span>
+
+    </div>
+
+
+    <!-- Score -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-body text-center py-5">
+
+            <h6 class="text-muted mb-2">
+                Your Score
+            </h6>
+
+            <div class="display-4 fw-bold">
+                {{ score }} / {{ total_marks }}
+            </div>
+
+            <div class="fs-5 text-muted mt-2">
+                {{ percentage|floatformat:1 }}%
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Summary -->
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body text-center">
+
+                    <h6 class="text-muted">
+                        Correct
+                    </h6>
+
+                    <div class="fs-3 fw-bold text-success">
+                        {{ correct_count }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body text-center">
+
+                    <h6 class="text-muted">
+                        Incorrect
+                    </h6>
+
+                    <div class="fs-3 fw-bold text-danger">
+                        {{ incorrect_count }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body text-center">
+
+                    <h6 class="text-muted">
+                        Unanswered
+                    </h6>
+
+                    <div class="fs-3 fw-bold text-secondary">
+                        {{ unanswered_count }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body text-center">
+
+                    <h6 class="text-muted">
+                        Manual Review
+                    </h6>
+
+                    <div class="fs-3 fw-bold text-warning">
+                        {{ pending_manual_count }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Question Review -->
+
+    <div class="card shadow-sm">
+
+        <div class="card-body p-4">
+
+            <h4 class="mb-4">
+                Question Review
+            </h4>
+
+
+            {% for answer in answers %}
+
+                <div class="border rounded p-4 mb-4">
+
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+
+                        <div>
+
+                            <strong>
+                                Question {{ answer.question.order }}
+                            </strong>
+
+                            <span class="text-muted ms-2">
+                                {{ answer.question.marks }} marks
+                            </span>
+
+                        </div>
+
+
+                        {% if answer.question.question_type == "SHORT_ANSWER" %}
+
+                            {% if answer.answer_text %}
+
+                                <span class="badge bg-warning text-dark">
+                                    Awaiting Teacher Evaluation
+                                </span>
+
+                            {% else %}
+
+                                <span class="badge bg-secondary">
+                                    Unanswered
+                                </span>
+
+                            {% endif %}
+
+
+                        {% elif answer.awarded_marks is not None %}
+
+                            {% if answer.awarded_marks > 0 %}
+
+                                <span class="badge bg-success">
+                                    Correct
+                                </span>
+
+                            {% elif answer.awarded_marks < 0 %}
+
+                                <span class="badge bg-danger">
+                                    Incorrect
+                                </span>
+
+                            {% else %}
+
+                                <span class="badge bg-danger">
+                                    Incorrect
+                                </span>
+
+                            {% endif %}
+
+                        {% else %}
+
+                            <span class="badge bg-secondary">
+                                Unanswered
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div class="mb-4">
+
+                        <h5>
+                            {{ answer.question.question_text }}
+                        </h5>
+
+                    </div>
+
+
+                    <!-- MCQ Single -->
+
+                    {% if answer.question.question_type == "MCQ_SINGLE" %}
+
+                        <div class="mb-3">
+
+                            <strong>
+                                Your Answer:
+                            </strong>
+
+                            {% if answer.selected_option %}
+
+                                <div class="border rounded p-3 mt-2">
+
+                                    {{ answer.selected_option.option_text }}
+
+                                </div>
+
+                            {% else %}
+
+                                <div class="text-muted mt-2">
+                                    Not answered
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+
+                    <!-- MCQ Multiple -->
+
+                    {% elif answer.question.question_type == "MCQ_MULTI" %}
+
+                        <div class="mb-3">
+
+                            <strong>
+                                Your Answers:
+                            </strong>
+
+                            {% if answer.selected_options.all %}
+
+                                <ul class="mt-2">
+
+                                    {% for option in answer.selected_options.all %}
+
+                                        <li>
+                                            {{ option.option_text }}
+                                        </li>
+
+                                    {% empty %}
+
+                                        <li class="text-muted">
+                                            Not answered
+                                        </li>
+
+                                    {% endfor %}
+
+                                </ul>
+
+                            {% else %}
+
+                                <div class="text-muted mt-2">
+                                    Not answered
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+
+                    <!-- Other answer types -->
+
+                    {% else %}
+
+                        <div class="mb-3">
+
+                            <strong>
+                                Your Answer:
+                            </strong>
+
+                            {% if answer.answer_text %}
+
+                                <div class="border rounded p-3 mt-2">
+                                    {{ answer.answer_text }}
+                                </div>
+
+                            {% else %}
+
+                                <div class="text-muted mt-2">
+                                    Not answered
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+                    {% endif %}
+
+
+                    {% if answer.awarded_marks is not None %}
+
+                        <div class="mt-3">
+
+                            <strong>
+                                Marks Awarded:
+                            </strong>
+
+                            <span class="ms-2">
+
+                                {{ answer.awarded_marks }}
+                                /
+                                {{ answer.question.marks }}
+
+                            </span>
+
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+            {% empty %}
+
+                <div class="text-center py-4">
+
+                    <p class="text-muted mb-0">
+                        No answers were recorded for this assessment.
+                    </p>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+
+    <!-- Navigation -->
+
+    <div class="d-flex justify-content-between mt-4 mb-5">
+
+        <a
+            href="{% url 'student_assessments' %}"
+            class="btn btn-outline-secondary"
+        >
+            Back to Tests
+        </a>
+
+
+        <a
+            href="{% url 'dashboard' %}"
+            class="btn btn-primary"
+        >
+            Dashboard
+        </a>
+
+    </div>
+
+</div>
+
+{% endblock %}

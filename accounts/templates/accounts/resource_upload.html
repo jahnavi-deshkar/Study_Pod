@@ -1,0 +1,185 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <div class="mb-4">
+        <h2>Upload Study Resource</h2>
+
+        <p class="text-muted">
+            Upload learning materials for one of your assigned classes and subjects.
+        </p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm">
+
+        <div class="card-body">
+
+            <form method="POST" enctype="multipart/form-data">
+
+                {% csrf_token %}
+
+                <div class="mb-3">
+
+                    <label
+                        for="title"
+                        class="form-label"
+                    >
+                        Resource Title
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="title"
+                        name="title"
+                        placeholder="Example: Quadratic Equations Notes"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="mb-3">
+
+                    <label
+                        for="description"
+                        class="form-label"
+                    >
+                        Description
+                    </label>
+
+                    <textarea
+                        class="form-control"
+                        id="description"
+                        name="description"
+                        rows="4"
+                        placeholder="Briefly describe this resource..."
+                    ></textarea>
+
+                </div>
+
+
+                <div class="mb-3">
+
+                    <label
+                        for="student_class"
+                        class="form-label"
+                    >
+                        Class
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="student_class"
+                        name="student_class"
+                        required
+                    >
+
+                        <option value="">
+                            Select Class
+                        </option>
+
+                        {% for assignment in assignments %}
+
+                            <option
+                                value="{{ assignment.student_class.id }}"
+                            >
+                                {{ assignment.student_class.name }}
+                                -
+                                {{ assignment.student_class.section }}
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="mb-3">
+
+                    <label
+                        for="subject"
+                        class="form-label"
+                    >
+                        Subject
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="subject"
+                        name="subject"
+                        required
+                    >
+
+                        <option value="">
+                            Select Subject
+                        </option>
+
+                        {% for assignment in assignments %}
+
+                            <option
+                                value="{{ assignment.subject.id }}"
+                            >
+                                {{ assignment.subject.name }}
+                                ({{ assignment.subject.code }})
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="mb-4">
+
+                    <label
+                        for="file"
+                        class="form-label"
+                    >
+                        Resource File
+                    </label>
+
+                    <input
+                        type="file"
+                        class="form-control"
+                        id="file"
+                        name="file"
+                        required
+                    >
+
+                    <div class="form-text">
+                        Upload a PDF, document, presentation,
+                        or other learning material.
+                    </div>
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                >
+                    Upload Resource
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

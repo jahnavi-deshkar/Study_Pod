@@ -31,4 +31,22 @@ urlpatterns = [
     name="parent_attendance"
     ),
 
+    path(
+    "resources/upload/",
+    views.resource_upload,
+    name="resource_upload"
+    ),
+
+    path(
+        "resources/",
+        views.resource_list,
+        name="resource_list"
+    ),
+
+    path(
+        "assessments/create/",
+        views.create_assessment,
+        name="create_assessment"
+    )
+
 ]

@@ -1,247 +1,500 @@
-{% extends "accounts/base.html" %}
+@login_required
+def student_test(request, assessment_id):
+
+    if request.user.role != "STUDENT":
+        return redirect("dashboard")
+
+    student = request.user.student_profile
+
+    if not student.student_class:
+        messages.error(
+            request,
+            "You are not assigned to a class."
+        )
+        return redirect("student_assessments")
+
+    assessment = Assessment.objects.filter(
+        id=assessment_id,
+        student_class=student.student_class
+    ).first()
+
+    if not assessment:
+        messages.error(
+            request,
+            "Assessment not found or you do not have access to it."
+        )
+        return redirect("student_assessments")
+
+    questions = list(
+        assessment.questions.prefetch_related(
+            "options",
+            "images"
+        ).order_by(
+            "order",
+            "id"
+        )
+    )
+
+    if not questions:
+        messages.error(
+            request,
+            "This assessment does not have any questions yet."
+        )
+
+        return redirect(
+            "student_assessment_instructions",
+            assessment_id=assessment.id
+        )
+
+    # =================================================
+    # GET OR CREATE ATTEMPT
+    # =================================================
+
+    attempt, created = AssessmentAttempt.objects.get_or_create(
+        assessment=assessment,
+        student=student,
+        defaults={
+            "started_at": timezone.now(),
+            "expires_at": timezone.now() + timedelta(
+                hours=assessment.duration_hours,
+                minutes=assessment.duration_minutes
+            ),
+            "status": AssessmentAttempt.Status.IN_PROGRESS,
+        }
+    )
+
+    # =================================================
+    # PREVENT REOPENING SUBMITTED TEST
+    # =================================================
+
+    if attempt.status != AssessmentAttempt.Status.IN_PROGRESS:
+
+        messages.info(
+            request,
+            "This assessment has already been submitted."
+        )
+
+        return redirect(
+            "student_result",
+            assessment_id=assessment.id
+        )
+
+    # =================================================
+    # CHECK TIMER EXPIRY
+    # =================================================
+
+    if timezone.now() >= attempt.expires_at:
+
+        attempt.status = AssessmentAttempt.Status.TIME_EXPIRED
+        attempt.submitted_at = timezone.now()
+
+        attempt.save(
+            update_fields=[
+                "status",
+                "submitted_at"
+            ]
+        )
+
+        messages.warning(
+            request,
+            "Time is up. Your test has been automatically submitted."
+        )
 
-{% block content %}
+        return redirect(
+            "student_result",
+            assessment_id=assessment.id
+        )
 
-<div class="container mt-5">
+    # =================================================
+    # CURRENT QUESTION
+    # =================================================
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    try:
 
-        <div>
-            <h2>{{ assessment.title }}</h2>
+        question_number = int(
+            request.GET.get(
+                "question",
+                1
+            )
+        )
 
-            <p class="text-muted mb-0">
-                {{ assessment.subject.name }}
-            </p>
-        </div>
+    except (TypeError, ValueError):
 
-        <div class="text-end">
-            <div class="text-muted">
-                Question
-            </div>
+        question_number = 1
 
-            <strong>
-                {{ question_number }} / {{ question_count }}
-            </strong>
-        </div>
+    if question_number < 1:
+        question_number = 1
 
-    </div>
+    if question_number > len(questions):
+        question_number = len(questions)
 
+    question = questions[
+        question_number - 1
+    ]
 
-    <div class="card shadow-sm">
+    # =================================================
+    # SAVE / NAVIGATE
+    # =================================================
 
-        <div class="card-body p-4">
+    if request.method == "POST":
 
-            <div class="mb-4">
+        # -------------------------------------------------
+        # Get submitted question number
+        # -------------------------------------------------
 
-                <span class="badge bg-primary">
-                    {{ question.get_question_type_display }}
-                </span>
+        try:
 
-                <span class="badge bg-secondary">
-                    {{ question.marks }} marks
-                </span>
+            posted_question_number = int(
+                request.POST.get(
+                    "question_number",
+                    question_number
+                )
+            )
 
-            </div>
+        except (TypeError, ValueError):
 
+            posted_question_number = question_number
 
-            <h4 class="mb-4">
-                {{ question.question_text }}
-            </h4>
+        # -------------------------------------------------
+        # Validate question number
+        # -------------------------------------------------
 
+        if (
+            posted_question_number < 1
+            or posted_question_number > len(questions)
+        ):
 
-            {% for image in question.images.all %}
+            messages.error(
+                request,
+                "Invalid question."
+            )
 
-                <div class="mb-4">
+            return redirect(
+                "student_test",
+                assessment_id=assessment.id
+            )
 
-                    <img
-                        src="{{ image.image.url }}"
-                        class="img-fluid rounded mb-3"
-                        alt="Question image"
-                    >
+        question = questions[
+            posted_question_number - 1
+        ]
 
-                </div>
+        # -------------------------------------------------
+        # Check expiry before saving
+        # -------------------------------------------------
 
-            {% endfor %}
+        if timezone.now() >= attempt.expires_at:
 
+            attempt.status = AssessmentAttempt.Status.TIME_EXPIRED
+            attempt.submitted_at = timezone.now()
 
-            <form method="post">
-                <input
-                    type="hidden"
-                    name="question_number"
-                    value="{{ question_number }}"
-                >
+            attempt.save(
+                update_fields=[
+                    "status",
+                    "submitted_at"
+                ]
+            )
 
-                {% csrf_token %}
+            messages.warning(
+                request,
+                "Time is up. Your test has been automatically submitted."
+            )
 
+            return redirect(
+                "student_result",
+                assessment_id=assessment.id
+            )
 
-                {% if question.question_type == "MCQ_SINGLE" %}
+        # =================================================
+        # READ ACTION
+        # =================================================
 
-                    {% for option in question.options.all %}
+        action = request.POST.get(
+            "action",
+            "next"
+        )
 
-                        <div class="form-check border rounded p-3 mb-2">
+        # =================================================
+        # READ ANSWER
+        # =================================================
 
-                            <input
-                                class="form-check-input ms-0 me-2"
-                                type="radio"
-                                name="answer"
-                                value="{{ option.id }}"
-                                id="option{{ option.id }}"
-                                {% if existing_answer.selected_option_id == option.id %}
-                                    checked
-                                {% endif %}
-                            >
+        selected_option = None
+        selected_options = []
+        answer_text = ""
 
-                            <label
-                                class="form-check-label"
-                                for="option{{ option.id }}"
-                            >
-                                {{ option.option_text }}
-                            </label>
+        if question.question_type == Question.QuestionType.MCQ_SINGLE:
 
-                        </div>
+            option_id = request.POST.get(
+                "answer"
+            )
 
-                    {% endfor %}
+            if option_id:
 
+                selected_option = question.options.filter(
+                    id=option_id
+                ).first()
 
-                {% elif question.question_type == "MCQ_MULTI" %}
+        elif question.question_type == Question.QuestionType.MCQ_MULTI:
 
-                    {% for option in question.options.all %}
+            option_ids = request.POST.getlist(
+                "answer"
+            )
 
-                        <div class="form-check border rounded p-3 mb-2">
+            selected_options = list(
+                question.options.filter(
+                    id__in=option_ids
+                )
+            )
 
-                            <input
-                                class="form-check-input ms-0 me-2"
-                                type="checkbox"
-                                name="answer"
-                                value="{{ option.id }}"
-                                id="option{{ option.id }}"
-                            >
+        else:
 
-                            <label
-                                class="form-check-label"
-                                for="option{{ option.id }}"
-                            >
-                                {{ option.option_text }}
-                            </label>
+            answer_text = request.POST.get(
+                "answer",
+                ""
+            ).strip()
 
-                        </div>
+        # =================================================
+        # MARK FOR REVIEW
+        # =================================================
 
-                    {% endfor %}
+        mark_for_review = (
+            request.POST.get("mark_for_review") == "true"
+        )
 
+        # =================================================
+        # CREATE / UPDATE ANSWER
+        # =================================================
 
-                {% elif question.question_type == "TRUE_FALSE" %}
+        student_answer, created_answer = (
+            StudentAnswer.objects.get_or_create(
+                attempt=attempt,
+                question=question
+            )
+        )
 
-                    <div class="form-check border rounded p-3 mb-2">
+        student_answer.selected_option = selected_option
+        student_answer.answer_text = answer_text
+        student_answer.is_marked_for_review = mark_for_review
 
-                        <input
-                            class="form-check-input ms-0 me-2"
-                            type="radio"
-                            name="answer"
-                            value="True"
-                            id="true"
-                        >
+        student_answer.save()
 
-                        <label
-                            class="form-check-label"
-                            for="true"
-                        >
-                            True
-                        </label>
+        # =================================================
+        # MULTIPLE CHOICE ANSWERS
+        # =================================================
 
-                    </div>
+        if question.question_type == Question.QuestionType.MCQ_MULTI:
 
+            student_answer.selected_options.set(
+                selected_options
+            )
 
-                    <div class="form-check border rounded p-3 mb-2">
+        else:
 
-                        <input
-                            class="form-check-input ms-0 me-2"
-                            type="radio"
-                            name="answer"
-                            value="False"
-                            id="false"
-                        >
+            student_answer.selected_options.clear()
 
-                        <label
-                            class="form-check-label"
-                            for="false"
-                        >
-                            False
-                        </label>
+        # =================================================
+        # DIRECT QUESTION NAVIGATION
+        # =================================================
 
-                    </div>
+        if action == "jump":
 
+            try:
 
-                {% elif question.question_type == "NUMERICAL" %}
+                target_question = int(
+                    request.POST.get(
+                        "target_question",
+                        1
+                    )
+                )
 
-                    <div class="mb-3">
+            except (TypeError, ValueError):
 
-                        <label class="form-label">
-                            Your Answer
-                        </label>
+                target_question = 1
 
-                        <input
-                            type="number"
-                            class="form-control"
-                            name="answer"
-                            value="{{ existing_answer.answer_text|default:'' }}"
-                        >
+            if target_question < 1:
+                target_question = 1
 
-                    </div>
+            if target_question > len(questions):
+                target_question = len(questions)
 
+            next_url = reverse(
+                "student_test",
+                kwargs={
+                    "assessment_id": assessment.id
+                }
+            )
 
-                {% elif question.question_type == "SHORT_ANSWER" %}
+            next_url += (
+                f"?question={target_question}"
+            )
 
-                    <div class="mb-3">
+            return HttpResponseRedirect(
+                next_url
+            )
 
-                        <label class="form-label">
-                            Your Answer
-                        </label>
+        # =================================================
+        # PREVIOUS QUESTION
+        # =================================================
 
-                        <textarea
-                            class="form-control"
-                            rows="5"
-                            name="answer"
-                        >{{ existing_answer.answer_text|default:'' }}</textarea>
+        if action == "previous":
 
-                    </div>
+            previous_question = (
+                posted_question_number - 1
+            )
 
-                {% endif %}
+            if previous_question < 1:
+                previous_question = 1
 
+            previous_url = reverse(
+                "student_test",
+                kwargs={
+                    "assessment_id": assessment.id
+                }
+            )
 
-                <hr class="my-4">
+            previous_url += (
+                f"?question={previous_question}"
+            )
 
+            return HttpResponseRedirect(
+                previous_url
+            )
 
-                <div class="d-flex justify-content-between">
+        # =================================================
+        # NEXT QUESTION
+        # =================================================
 
-                    <a
-                        href="{% url 'student_assessments' %}"
-                        class="btn btn-outline-secondary"
-                    >
-                        Exit Test
-                    </a>
+        if action == "next":
 
+            next_question_number = (
+                posted_question_number + 1
+            )
 
-                    <button
-                        type="submit"
-                        class="btn btn-primary"
-                    >
+            if next_question_number <= len(questions):
 
-                        {% if question_number == question_count %}
-                            Submit Test
-                        {% else %}
-                            Save & Next
-                        {% endif %}
+                next_url = reverse(
+                    "student_test",
+                    kwargs={
+                        "assessment_id": assessment.id
+                    }
+                )
 
-                    </button>
+                next_url += (
+                    f"?question={next_question_number}"
+                )
 
-                </div>
+                return HttpResponseRedirect(
+                    next_url
+                )
 
-            </form>
+            # Last question
+            return redirect(
+                "student_submit",
+                assessment_id=assessment.id
+            )
 
-        </div>
+        # =================================================
+        # SUBMIT TEST
+        # =================================================
 
-    </div>
+        if action == "submit":
 
-</div>
+            return redirect(
+                "student_submit",
+                assessment_id=assessment.id
+            )
 
-{% endblock %}
+        # Fallback
+        return redirect(
+            "student_test",
+            assessment_id=assessment.id
+        )
+
+    # =================================================
+    # LOAD EXISTING ANSWER
+    # =================================================
+
+    existing_answer = StudentAnswer.objects.filter(
+        attempt=attempt,
+        question=question
+    ).first()
+
+    # =================================================
+    # LOAD ALL ANSWERS FOR NAVIGATOR
+    # =================================================
+
+    student_answers = {
+        answer.question_id: answer
+        for answer in StudentAnswer.objects.filter(
+            attempt=attempt
+        ).prefetch_related(
+            "selected_options"
+        )
+    }
+
+    # =================================================
+    # BUILD QUESTION NAVIGATION DATA
+    # =================================================
+
+    question_navigation = []
+
+    for index, nav_question in enumerate(
+        questions,
+        start=1
+    ):
+
+        nav_answer = student_answers.get(
+            nav_question.id
+        )
+
+        is_answered = False
+        is_marked = False
+
+        if nav_answer:
+
+            is_marked = nav_answer.is_marked_for_review
+
+            if nav_question.question_type == Question.QuestionType.MCQ_SINGLE:
+
+                is_answered = (
+                    nav_answer.selected_option_id is not None
+                )
+
+            elif nav_question.question_type == Question.QuestionType.MCQ_MULTI:
+
+                is_answered = (
+                    nav_answer.selected_options.exists()
+                )
+
+            else:
+
+                is_answered = bool(
+                    nav_answer.answer_text.strip()
+                )
+
+        question_navigation.append(
+            {
+                "number": index,
+                "question_id": nav_question.id,
+                "answered": is_answered,
+                "marked": is_marked,
+                "current": index == question_number,
+            }
+        )
+
+    # =================================================
+    # RENDER
+    # =================================================
+
+    return render(
+        request,
+        "exam_engine/student_test.html",
+        {
+            "assessment": assessment,
+            "attempt": attempt,
+            "question": question,
+            "question_number": question_number,
+            "question_count": len(questions),
+            "existing_answer": existing_answer,
+            "question_navigation": question_navigation,
+        }
+    )

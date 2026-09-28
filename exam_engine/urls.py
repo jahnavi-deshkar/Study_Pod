@@ -55,4 +55,15 @@ urlpatterns = [
         views.student_result,
         name="student_result"
     ),
+
+    path(
+        "tests/<int:assessment_id>/attempts/",
+        views.teacher_attempts,
+        name="teacher_attempts"
+    ),
+    path(
+        "tests/<int:assessment_id>/attempts/<int:attempt_id>/",
+        views.teacher_attempt_detail,
+        name="teacher_attempt_detail"
+    ),
 ]

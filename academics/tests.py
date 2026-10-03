@@ -1,5 +1,7 @@
+from io import StringIO
 from datetime import date
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -423,3 +425,14 @@ class AnalyticsDashboardTests(TestCase):
         })
         self.assertEqual(class_response.status_code, 403)
         self.assertEqual(assessment_response.status_code, 403)
+
+
+class SeedDataCommandTests(TestCase):
+    def test_seed_command_is_repeatable(self):
+        call_command("seed_data", stdout=StringIO())
+        call_command("seed_data", stdout=StringIO())
+
+        self.assertEqual(User.objects.filter(username__in=["teacher1", "student1", "student2"]).count(), 3)
+        self.assertEqual(Class.objects.filter(name="10", section="A", academic_year="2026-27").count(), 1)
+        self.assertEqual(Subject.objects.filter(code__in=["SEED-MATH", "SEED-SCI"]).count(), 2)
+        self.assertEqual(Assessment.objects.filter(title="Sample Mathematics Assessment").count(), 1)

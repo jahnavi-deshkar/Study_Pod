@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -433,6 +433,7 @@ def student_assessment_instructions(request, assessment_id):
 
 
 @login_required
+@transaction.atomic
 def student_test(request, assessment_id):
 
     if request.user.role != "STUDENT":
@@ -499,13 +500,21 @@ def student_test(request, assessment_id):
     student_attempts = AssessmentAttempt.objects.filter(
         assessment=assessment, student=student
     )
-    attempt = student_attempts.filter(
+    attempt = student_attempts.select_for_update().filter(
         status=AssessmentAttempt.Status.IN_PROGRESS
     ).order_by("-started_at", "-pk").first()
     created_attempt = False
     if attempt is None:
         attempt_count = student_attempts.count()
+        if request.method == "POST" and not assessment.access_code:
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse({"error": "There is no active attempt to save."}, status=403)
+            return HttpResponseForbidden("There is no active attempt to update.")
         if assessment.max_attempts > 0 and attempt_count >= assessment.max_attempts:
+            if request.method == "POST":
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse({"error": "No attempts remain."}, status=403)
+                return HttpResponseForbidden("No attempts remain.")
             messages.error(request, "You have used all allowed attempts for this assessment.")
             if attempt_count:
                 return redirect("student_result", assessment_id=assessment.id)
@@ -553,6 +562,10 @@ def student_test(request, assessment_id):
     # -------------------------------------------------
 
     if attempt.status != AssessmentAttempt.Status.IN_PROGRESS:
+        if request.method == "POST":
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse({"error": "This attempt is no longer editable."}, status=403)
+            return HttpResponseForbidden("This attempt is no longer editable.")
         messages.info(
             request,
             "This assessment has already been submitted."
@@ -1011,6 +1024,7 @@ def student_test(request, assessment_id):
 
 
 @login_required
+@transaction.atomic
 def student_submit(request, assessment_id):
 
     if request.user.role != "STUDENT":
@@ -1037,14 +1051,14 @@ def student_submit(request, assessment_id):
         )
         return redirect("student_assessments")
 
-    attempt = AssessmentAttempt.objects.filter(
+    attempt = AssessmentAttempt.objects.select_for_update().filter(
         assessment=assessment,
         student=student,
         status=AssessmentAttempt.Status.IN_PROGRESS,
     ).order_by("-started_at", "-pk").first()
 
     if attempt is None:
-        attempt = AssessmentAttempt.objects.filter(
+        attempt = AssessmentAttempt.objects.select_for_update().filter(
             assessment=assessment,
             student=student,
         ).order_by("-started_at", "-pk").first()

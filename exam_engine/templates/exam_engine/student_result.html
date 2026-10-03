@@ -16,8 +16,8 @@
             </p>
         </div>
 
-        <span class="badge bg-success fs-6">
-            Submitted
+        <span class="badge {% if attempt.status == 'NEEDS_EVALUATION' %}bg-warning text-dark{% elif attempt.status == 'EVALUATED' %}bg-success{% else %}bg-secondary{% endif %} fs-6">
+            {{ attempt.get_status_display }}
         </span>
 
     </div>
@@ -168,7 +168,13 @@
 
                         {% if answer.question.question_type == "SHORT_ANSWER" %}
 
-                            {% if answer.answer_text %}
+                            {% if not answer.answer_text %}
+
+                                <span class="badge bg-secondary">
+                                    Unanswered
+                                </span>
+
+                            {% elif answer.awarded_marks is None %}
 
                                 <span class="badge bg-warning text-dark">
                                     Awaiting Teacher Evaluation
@@ -176,8 +182,8 @@
 
                             {% else %}
 
-                                <span class="badge bg-secondary">
-                                    Unanswered
+                                <span class="badge bg-success">
+                                    Evaluated
                                 </span>
 
                             {% endif %}
@@ -342,6 +348,13 @@
 
                         </div>
 
+                    {% endif %}
+
+                    {% if attempt.status == "EVALUATED" and answer.teacher_feedback %}
+                        <div class="alert alert-light border mt-3 mb-0">
+                            <strong>Teacher feedback:</strong>
+                            <div>{{ answer.teacher_feedback|linebreaks }}</div>
+                        </div>
                     {% endif %}
 
                 </div>

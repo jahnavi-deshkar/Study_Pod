@@ -1,8 +1,9 @@
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
@@ -1007,9 +1008,18 @@ def student_submit(request, assessment_id):
         ).first()
 
         if not answer:
-
-            unanswered_count += 1
-            continue
+            answer = StudentAnswer.objects.create(
+                attempt=attempt,
+                question=question,
+                awarded_marks=(
+                    Decimal("0")
+                    if question.question_type == Question.QuestionType.SHORT_ANSWER
+                    else None
+                ),
+            )
+            if question.question_type != Question.QuestionType.SHORT_ANSWER:
+                unanswered_count += 1
+                continue
 
         # -------------------------------------------------
         # MCQ - Single
@@ -1208,7 +1218,7 @@ def student_submit(request, assessment_id):
             if not answer.answer_text.strip():
 
                 unanswered_count += 1
-                answer.awarded_marks = None
+                answer.awarded_marks = Decimal("0")
 
             else:
 
@@ -1224,7 +1234,17 @@ def student_submit(request, assessment_id):
     # Mark attempt as submitted / time expired
     # -------------------------------------------------
 
-    if time_expired:
+    if pending_manual_count:
+
+        attempt.status = AssessmentAttempt.Status.NEEDS_EVALUATION
+
+    elif assessment.questions.filter(
+        question_type=Question.QuestionType.SHORT_ANSWER
+    ).exists() and not time_expired:
+
+        attempt.status = AssessmentAttempt.Status.EVALUATED
+
+    elif time_expired:
 
         attempt.status = (
             AssessmentAttempt.Status.TIME_EXPIRED
@@ -1247,17 +1267,29 @@ def student_submit(request, assessment_id):
 
     if time_expired:
 
-        messages.warning(
-            request,
-            "Your time expired. The assessment has been submitted."
-        )
+        if pending_manual_count:
+            messages.warning(
+                request,
+                "Your assessment was submitted and is waiting for teacher evaluation."
+            )
+        else:
+            messages.warning(
+                request,
+                "Your time expired. The assessment has been submitted."
+            )
 
     else:
 
-        messages.success(
-            request,
-            "Your assessment has been submitted successfully."
-        )
+        if pending_manual_count:
+            messages.info(
+                request,
+                "Your assessment was submitted and is waiting for teacher evaluation."
+            )
+        else:
+            messages.success(
+                request,
+                "Your assessment has been submitted successfully."
+            )
 
     return redirect(
         "student_result",
@@ -1320,29 +1352,8 @@ def student_result(request, assessment_id):
         str(assessment.total_marks)
     )
 
-    awarded_answers = [
-        answer
-        for answer in answers
-        if answer.awarded_marks is not None
-    ]
-
-    score = sum(
-        (
-            answer.awarded_marks
-            for answer in awarded_answers
-        ),
-        Decimal("0")
-    )
-
-    if total_marks > 0:
-
-        percentage = (
-            score / total_marks
-        ) * Decimal("100")
-
-    else:
-
-        percentage = Decimal("0")
+    score = attempt.score
+    percentage = attempt.percentage
 
     correct_count = 0
     incorrect_count = 0
@@ -1359,8 +1370,12 @@ def student_result(request, assessment_id):
         ):
 
             if answer.answer_text.strip():
-
-                pending_manual_count += 1
+                if answer.awarded_marks is None:
+                    pending_manual_count += 1
+                elif answer.awarded_marks > 0:
+                    correct_count += 1
+                else:
+                    incorrect_count += 1
 
             else:
 
@@ -1452,36 +1467,8 @@ def teacher_attempts(request, assessment_id):
     # -------------------------------------------------
 
     for attempt in attempts:
-
-        awarded_answers = list(
-            StudentAnswer.objects.filter(
-                attempt=attempt,
-                awarded_marks__isnull=False
-            )
-        )
-
-        attempt.display_score = sum(
-            (
-                answer.awarded_marks
-                for answer in awarded_answers
-            ),
-            Decimal("0")
-        )
-
-        total_marks = Decimal(
-            str(assessment.total_marks)
-        )
-
-        if total_marks > 0:
-
-            attempt.display_percentage = (
-                attempt.display_score
-                / total_marks
-            ) * Decimal("100")
-
-        else:
-
-            attempt.display_percentage = Decimal("0")
+        attempt.display_score = attempt.score
+        attempt.display_percentage = attempt.percentage
 
     return render(
         request,
@@ -1558,6 +1545,75 @@ def teacher_attempt_detail(
             assessment_id=assessment.id
         )
 
+    grading_errors = []
+    submitted_values = {}
+    if request.method == "POST":
+        pending_answers = list(
+            StudentAnswer.objects.filter(
+                attempt=attempt,
+                question__question_type=Question.QuestionType.SHORT_ANSWER,
+                awarded_marks__isnull=True,
+            ).exclude(answer_text="").select_related("question")
+        )
+
+        if attempt.status == AssessmentAttempt.Status.IN_PROGRESS:
+            grading_errors.append("This assessment attempt has not been submitted yet.")
+        elif not pending_answers:
+            grading_errors.append("There are no short answers waiting for evaluation.")
+        else:
+            grades = []
+            for answer in pending_answers:
+                marks_key = f"marks_awarded_{answer.id}"
+                feedback_key = f"teacher_feedback_{answer.id}"
+                raw_marks = (request.POST.get(marks_key) or "").strip()
+                submitted_values[marks_key] = raw_marks
+                submitted_values[feedback_key] = request.POST.get(feedback_key, "")
+
+                try:
+                    marks_awarded = Decimal(raw_marks)
+                    if not marks_awarded.is_finite():
+                        raise InvalidOperation
+                except (InvalidOperation, TypeError, ValueError):
+                    grading_errors.append(
+                        f"Enter a valid mark for Question {answer.question.order}."
+                    )
+                    continue
+
+                if marks_awarded < 0 or marks_awarded > Decimal(str(answer.question.marks)):
+                    grading_errors.append(
+                        f"Marks for Question {answer.question.order} must be between 0 and {answer.question.marks}."
+                    )
+                    continue
+                if marks_awarded.as_tuple().exponent < -2:
+                    grading_errors.append(
+                        f"Marks for Question {answer.question.order} can have at most two decimal places."
+                    )
+                    continue
+
+                grades.append((answer, marks_awarded, submitted_values[feedback_key]))
+
+            if not grading_errors and len(grades) == len(pending_answers):
+                with transaction.atomic():
+                    for answer, marks_awarded, feedback in grades:
+                        answer.awarded_marks = marks_awarded
+                        answer.teacher_feedback = feedback.strip()
+                        answer.save(update_fields=["awarded_marks", "teacher_feedback"])
+
+                    attempt.refresh_from_db()
+                    attempt.status = (
+                        AssessmentAttempt.Status.NEEDS_EVALUATION
+                        if attempt.pending_evaluation_count
+                        else AssessmentAttempt.Status.EVALUATED
+                    )
+                    attempt.save(update_fields=["status"])
+
+                messages.success(request, "Evaluation saved and the attempt score has been updated.")
+                return redirect(
+                    "teacher_attempt_detail",
+                    assessment_id=assessment.id,
+                    attempt_id=attempt.id,
+                )
+
     answers = StudentAnswer.objects.filter(
         attempt=attempt
     ).select_related(
@@ -1571,32 +1627,32 @@ def teacher_attempt_detail(
         "question__id"
     )
 
+    for answer in answers:
+        answer.needs_evaluation = (
+            answer.question.question_type == Question.QuestionType.SHORT_ANSWER
+            and bool(answer.answer_text.strip())
+            and answer.awarded_marks is None
+        )
+        answer.grading_marks_value = submitted_values.get(
+            f"marks_awarded_{answer.id}",
+            answer.awarded_marks if answer.awarded_marks is not None else "",
+        )
+        answer.grading_feedback_value = submitted_values.get(
+            f"teacher_feedback_{answer.id}",
+            answer.teacher_feedback,
+        )
+
     # -------------------------------------------------
     # Calculate attempt summary
     # -------------------------------------------------
 
-    score = sum(
-        (
-            answer.awarded_marks
-            for answer in answers
-            if answer.awarded_marks is not None
-        ),
-        Decimal("0")
-    )
+    score = attempt.score
 
     total_marks = Decimal(
         str(assessment.total_marks)
     )
 
-    if total_marks > 0:
-
-        percentage = (
-            score / total_marks
-        ) * Decimal("100")
-
-    else:
-
-        percentage = Decimal("0")
+    percentage = attempt.percentage
 
     correct_count = 0
     incorrect_count = 0
@@ -1659,5 +1715,7 @@ def teacher_attempt_detail(
             "incorrect_count": incorrect_count,
             "unanswered_count": unanswered_count,
             "pending_manual_count": pending_manual_count,
+            "grading_errors": grading_errors,
+            "submitted_values": submitted_values,
         }
     )

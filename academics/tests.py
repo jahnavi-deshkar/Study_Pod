@@ -5,7 +5,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import StudentProfile, TeacherProfile, User
-from .models import Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
+from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
+
+from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
 
 
 class AttendanceWorkflowTests(TestCase):
@@ -265,3 +267,159 @@ class DoubtForumTests(TestCase):
         self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
         thread.refresh_from_db()
         self.assertEqual(thread.status, DoubtThread.Status.RESOLVED)
+
+
+class AnalyticsDashboardTests(TestCase):
+    def setUp(self):
+        self.teacher_user = User.objects.create_user(
+            username="analytics-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        self.teacher = TeacherProfile.objects.create(
+            user=self.teacher_user, employee_id="T-ANALYTICS-1"
+        )
+        self.other_teacher_user = User.objects.create_user(
+            username="analytics-other-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        self.other_teacher = TeacherProfile.objects.create(
+            user=self.other_teacher_user, employee_id="T-ANALYTICS-2"
+        )
+        self.student_user = User.objects.create_user(
+            username="analytics-student", password="test-pass", role=User.Role.STUDENT
+        )
+        self.student = StudentProfile.objects.create(
+            user=self.student_user, roll_number="A-1"
+        )
+        self.class_one = Class.objects.create(name="10", section="A", academic_year="2026-27")
+        self.class_two = Class.objects.create(name="10", section="B", academic_year="2026-27")
+        self.student.student_class = self.class_one
+        self.student.save(update_fields=["student_class"])
+        self.subject_math = Subject.objects.create(name="Mathematics", code="AN-MATH")
+        self.subject_science = Subject.objects.create(name="Science", code="AN-SCI")
+        TeachingAssignment.objects.create(
+            teacher=self.teacher, student_class=self.class_one, subject=self.subject_math
+        )
+        TeachingAssignment.objects.create(
+            teacher=self.teacher, student_class=self.class_one, subject=self.subject_science
+        )
+        TeachingAssignment.objects.create(
+            teacher=self.other_teacher, student_class=self.class_two, subject=self.subject_math
+        )
+
+    def make_assessment(self, title, subject, total_marks, teacher=None, student_class=None):
+        return Assessment.objects.create(
+            title=title,
+            teacher=teacher or self.teacher,
+            student_class=student_class or self.class_one,
+            subject=subject,
+            assessment_type=Assessment.AssessmentType.TEST,
+            total_marks=total_marks,
+            is_published=True,
+        )
+
+    def add_result(self, assessment, student, marks_awarded, question=None):
+        question = question or Question.objects.create(
+            assessment=assessment,
+            question_text="Solve the problem",
+            question_type=Question.QuestionType.NUMERICAL,
+            marks=assessment.total_marks,
+            order=1,
+        )
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=student,
+            started_at=timezone.now(),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        StudentAnswer.objects.create(
+            attempt=attempt, question=question, awarded_marks=marks_awarded
+        )
+        return attempt
+
+    def test_student_analytics_uses_weighted_subject_and_overall_scores(self):
+        math_test = self.make_assessment("Algebra Test", self.subject_math, 10)
+        science_test = self.make_assessment("Science Test", self.subject_science, 20)
+        self.make_assessment("Not Taken", self.subject_math, 5)
+        self.add_result(math_test, self.student, 8)
+        self.add_result(science_test, self.student, 6)
+
+        self.client.force_login(self.student_user)
+        response = self.client.get(reverse("student_analytics"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["taken_count"], 2)
+        self.assertEqual(response.context["assigned_count"], 3)
+        self.assertAlmostEqual(float(response.context["average_percentage"]), 46.666, places=2)
+        self.assertEqual(response.context["highest_subject"]["subject"], self.subject_math)
+        self.assertEqual(response.context["lowest_subject"]["subject"], self.subject_science)
+        self.assertContains(response, "Algebra Test")
+        self.assertContains(response, "Science Test")
+
+    def test_student_analytics_is_private_and_for_student_role_only(self):
+        other_student_user = User.objects.create_user(
+            username="analytics-student-two", password="test-pass", role=User.Role.STUDENT
+        )
+        other_student = StudentProfile.objects.create(
+            user=other_student_user, roll_number="A-2", student_class=self.class_one
+        )
+        assessment = self.make_assessment("Private Result", self.subject_math, 10)
+        self.add_result(assessment, other_student, 9)
+        self.client.force_login(self.student_user)
+        response = self.client.get(reverse("student_analytics"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Private Result")
+
+        self.client.force_login(self.teacher_user)
+        response = self.client.get(reverse("student_analytics"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_teacher_analytics_calculates_class_item_and_attention_metrics(self):
+        second_student_user = User.objects.create_user(
+            username="analytics-student-three", password="test-pass", role=User.Role.STUDENT
+        )
+        second_student = StudentProfile.objects.create(
+            user=second_student_user, roll_number="A-3", student_class=self.class_one
+        )
+        assessment = self.make_assessment("Class Quiz", self.subject_math, 10)
+        question = Question.objects.create(
+            assessment=assessment,
+            question_text="Find x",
+            question_type=Question.QuestionType.NUMERICAL,
+            marks=10,
+            order=1,
+        )
+        self.add_result(assessment, self.student, 10, question=question)
+        self.add_result(assessment, second_student, 4, question=question)
+        self.client.force_login(self.teacher_user)
+
+        response = self.client.get(reverse("teacher_analytics"), {
+            "student_class": self.class_one.pk,
+            "assessment": assessment.pk,
+            "threshold": "50",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["submissions"], 2)
+        self.assertEqual(response.context["enrolled_count"], 2)
+        self.assertAlmostEqual(float(response.context["average_percentage"]), 70.0, places=1)
+        self.assertEqual(float(response.context["highest_score"]), 10.0)
+        self.assertEqual(float(response.context["lowest_score"]), 4.0)
+        self.assertEqual(len(response.context["needs_attention"]), 1)
+        self.assertEqual(float(response.context["item_analysis"][0]["correct_percentage"]), 50.0)
+
+    def test_teacher_analytics_rejects_unassigned_class_and_assessment(self):
+        own_assessment = self.make_assessment("Assigned", self.subject_math, 10)
+        foreign_assessment = self.make_assessment(
+            "Foreign", self.subject_math, 10,
+            teacher=self.other_teacher, student_class=self.class_two,
+        )
+        self.client.force_login(self.teacher_user)
+        class_response = self.client.get(reverse("teacher_analytics"), {
+            "student_class": self.class_two.pk,
+        })
+        assessment_response = self.client.get(reverse("teacher_analytics"), {
+            "student_class": self.class_one.pk,
+            "assessment": foreign_assessment.pk,
+        })
+        self.assertEqual(class_response.status_code, 403)
+        self.assertEqual(assessment_response.status_code, 403)

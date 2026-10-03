@@ -1,15 +1,20 @@
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
+from django.db.models import Avg, Count, DecimalField, ExpressionWrapper, F, Max, Min, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.http import HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import StudentProfile
+from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
 from .forms import AttendanceSelectionForm, DoubtReplyForm, DoubtThreadForm
-from .models import Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
+from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
 
 
 def _attendance_context(selection_form, selected_class=None, selected_date=None,
@@ -313,3 +318,212 @@ def doubt_thread_detail(request, pk):
         "can_reply": thread.status == DoubtThread.Status.OPEN,
         "is_teacher": assigned_teacher,
     })
+
+
+@login_required
+def student_analytics(request):
+    if request.user.role != "STUDENT":
+        return HttpResponseForbidden("Student analytics are available only to the signed-in student.")
+
+    student = request.user.student_profile
+    submitted_attempts = AssessmentAttempt.objects.filter(
+        student=student,
+        submitted_at__isnull=False,
+    ).select_related("assessment__subject", "assessment__student_class")
+    taken_stats = submitted_attempts.aggregate(
+        taken=Count("pk"),
+        total_available=Sum("assessment__total_marks"),
+    )
+    obtained = StudentAnswer.objects.filter(
+        attempt__in=submitted_attempts,
+    ).aggregate(total=Sum("awarded_marks"))["total"] or Decimal("0")
+    total_available = taken_stats["total_available"] or 0
+    average_percentage = (
+        (Decimal(obtained) / Decimal(total_available) * Decimal("100"))
+        if total_available else Decimal("0")
+    )
+
+    if student.student_class_id:
+        assigned_stats = Assessment.objects.filter(
+            student_class_id=student.student_class_id,
+            is_published=True,
+        ).aggregate(count=Count("pk"))
+        subject_ids = submitted_attempts.values_list(
+            "assessment__subject_id", flat=True
+        ).distinct()
+    else:
+        assigned_stats = {"count": 0}
+        subject_ids = Subject.objects.none().values_list("pk", flat=True)
+
+    subject_breakdown = []
+    for subject in Subject.objects.filter(pk__in=subject_ids).order_by("name"):
+        subject_attempts = submitted_attempts.filter(assessment__subject=subject)
+        stats = subject_attempts.aggregate(
+            taken=Count("pk"),
+            available=Sum("assessment__total_marks"),
+        )
+        marks = StudentAnswer.objects.filter(
+            attempt__in=subject_attempts,
+        ).aggregate(total=Sum("awarded_marks"))["total"] or Decimal("0")
+        available = stats["available"] or 0
+        percentage = Decimal(marks) / Decimal(available) * Decimal("100") if available else Decimal("0")
+        subject_breakdown.append({
+            "subject": subject,
+            "assessments_taken": stats["taken"],
+            "obtained_marks": marks,
+            "total_marks": available,
+            "percentage": percentage,
+        })
+
+    highest_subject = max(subject_breakdown, key=lambda row: row["percentage"], default=None)
+    lowest_subject = min(subject_breakdown, key=lambda row: row["percentage"], default=None)
+    history = []
+    for attempt in submitted_attempts.annotate(
+        analytics_score=Coalesce(
+            Sum("answers__awarded_marks"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(max_digits=9, decimal_places=2),
+        )
+    ).order_by("-submitted_at", "-pk"):
+        total = attempt.assessment.total_marks
+        history.append({
+            "attempt": attempt,
+            "score": attempt.analytics_score,
+            "total_marks": total,
+            "percentage": (Decimal(attempt.analytics_score) / Decimal(total) * 100) if total else Decimal("0"),
+        })
+
+    return render(request, "academics/student_analytics.html", {
+        "taken_count": taken_stats["taken"],
+        "assigned_count": assigned_stats["count"],
+        "average_percentage": average_percentage,
+        "subject_breakdown": subject_breakdown,
+        "highest_subject": highest_subject,
+        "lowest_subject": lowest_subject,
+        "history": history,
+    })
+
+
+@login_required
+def teacher_analytics(request):
+    if request.user.role != "TEACHER":
+        return HttpResponseForbidden("Teacher analytics are available only to teachers.")
+
+    teacher = request.user.teacher_profile
+    assignments = TeachingAssignment.objects.filter(teacher=teacher).select_related(
+        "student_class", "subject"
+    )
+    assigned_classes = Class.objects.filter(
+        teaching_assignments__teacher=teacher
+    ).distinct().order_by("name", "section")
+    raw_class_id = request.GET.get("student_class")
+    if raw_class_id:
+        selected_class = assigned_classes.filter(pk=raw_class_id).first()
+        if selected_class is None:
+            return HttpResponseForbidden("You are not assigned to this class.")
+    else:
+        selected_class = assigned_classes.first()
+
+    assessments = Assessment.objects.none()
+    selected_assessment = None
+    if selected_class:
+        assigned_subjects = assignments.filter(
+            student_class=selected_class
+        ).values_list("subject_id", flat=True)
+        assessments = Assessment.objects.filter(
+            teacher=teacher,
+            student_class=selected_class,
+            subject_id__in=assigned_subjects,
+        ).select_related("subject", "student_class").order_by("-created_at")
+        raw_assessment_id = request.GET.get("assessment")
+        if raw_assessment_id:
+            selected_assessment = assessments.filter(pk=raw_assessment_id).first()
+            if selected_assessment is None:
+                return HttpResponseForbidden("This assessment is not assigned to your class.")
+
+    threshold_value = request.GET.get("threshold", "50")
+    try:
+        threshold = Decimal(threshold_value)
+        if not threshold.is_finite() or threshold < 0 or threshold > 100:
+            raise InvalidOperation
+    except (InvalidOperation, TypeError, ValueError):
+        threshold = Decimal("50")
+        threshold_value = "50"
+
+    context = {
+        "assigned_classes": assigned_classes,
+        "selected_class": selected_class,
+        "assessments": assessments,
+        "selected_assessment": selected_assessment,
+        "threshold": threshold,
+        "threshold_value": threshold_value,
+    }
+    if selected_assessment:
+        total_marks = selected_assessment.total_marks or 0
+        score_field = DecimalField(max_digits=9, decimal_places=2)
+        percentage_expression = ExpressionWrapper(
+            F("analytics_score") * Value(Decimal("100")) / Value(Decimal(total_marks or 1)),
+            output_field=DecimalField(max_digits=9, decimal_places=2),
+        )
+        submitted_attempts = AssessmentAttempt.objects.filter(
+            assessment=selected_assessment,
+            submitted_at__isnull=False,
+        ).select_related("student__user").annotate(
+            analytics_score=Coalesce(
+                Sum("answers__awarded_marks"),
+                Value(Decimal("0.00")),
+                output_field=score_field,
+            ),
+        ).annotate(analytics_percentage=percentage_expression)
+        attempt_stats = submitted_attempts.aggregate(
+            submissions=Count("pk"),
+            average_percentage=Avg("analytics_percentage"),
+            highest_score=Max("analytics_score"),
+            lowest_score=Min("analytics_score"),
+        )
+        enrolled_count = StudentProfile.objects.filter(
+            student_class=selected_class
+        ).count()
+
+        questions = selected_assessment.questions.annotate(
+            submitted_count=Count(
+                "student_answers",
+                filter=Q(student_answers__attempt__submitted_at__isnull=False),
+                distinct=True,
+            ),
+            correct_count=Count(
+                "student_answers",
+                filter=Q(
+                    student_answers__attempt__submitted_at__isnull=False,
+                    student_answers__awarded_marks__gte=F("marks"),
+                ),
+                distinct=True,
+            ),
+        ).order_by("order", "pk")
+        item_analysis = []
+        for question in questions:
+            correct_percentage = (
+                Decimal(question.correct_count) / Decimal(attempt_stats["submissions"]) * 100
+                if attempt_stats["submissions"] else Decimal("0")
+            )
+            item_analysis.append({
+                "question": question,
+                "submitted_count": question.submitted_count,
+                "correct_count": question.correct_count,
+                "correct_percentage": correct_percentage,
+                "high_error": correct_percentage < 40,
+            })
+
+        needs_attention = submitted_attempts.filter(
+            analytics_percentage__lt=threshold
+        ).order_by("analytics_percentage", "student__user__last_name", "student__user__first_name")
+        context.update({
+            "average_percentage": attempt_stats["average_percentage"] or Decimal("0"),
+            "highest_score": attempt_stats["highest_score"],
+            "lowest_score": attempt_stats["lowest_score"],
+            "submissions": attempt_stats["submissions"],
+            "enrolled_count": enrolled_count,
+            "item_analysis": item_analysis,
+            "needs_attention": needs_attention,
+        })
+    return render(request, "academics/teacher_analytics.html", context)

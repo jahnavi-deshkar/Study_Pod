@@ -174,6 +174,8 @@ class Assessment(models.Model):
 
     total_marks = models.PositiveIntegerField()
 
+    is_published = models.BooleanField(default=False)
+
     # Test timing configuration
 
     timing_mode = models.CharField(

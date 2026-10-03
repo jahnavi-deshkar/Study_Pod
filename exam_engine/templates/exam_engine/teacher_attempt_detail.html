@@ -1,0 +1,60 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Attempt Details · {{ assessment.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="mb-1">Attempt Details</h2>
+            <p class="text-muted mb-0">{{ assessment.title }} · {{ attempt.student.user.get_full_name|default:attempt.student.user.username }}</p>
+        </div>
+        <a href="{% url 'teacher_attempts' assessment.id %}" class="btn btn-outline-secondary">Back to Attempts</a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted">Status</div><strong>{{ attempt.get_status_display }}</strong></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted">Score</div><strong>{{ score }} / {{ total_marks }} ({{ percentage|floatformat:1 }}%)</strong></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted">Started / Submitted</div><strong>{{ attempt.started_at|date:"d M Y, H:i" }}</strong><div class="small text-muted">{% if attempt.submitted_at %}{{ attempt.submitted_at|date:"d M Y, H:i" }}{% else %}Not submitted{% endif %}</div></div></div></div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-3"><div class="card"><div class="card-body text-center"><div class="text-muted">Correct</div><strong class="fs-4 text-success">{{ correct_count }}</strong></div></div></div>
+        <div class="col-sm-3"><div class="card"><div class="card-body text-center"><div class="text-muted">Incorrect</div><strong class="fs-4 text-danger">{{ incorrect_count }}</strong></div></div></div>
+        <div class="col-sm-3"><div class="card"><div class="card-body text-center"><div class="text-muted">Unanswered</div><strong class="fs-4">{{ unanswered_count }}</strong></div></div></div>
+        <div class="col-sm-3"><div class="card"><div class="card-body text-center"><div class="text-muted">Pending Review</div><strong class="fs-4 text-warning">{{ pending_manual_count }}</strong></div></div></div>
+    </div>
+
+    <h4 class="mb-3">Answers</h4>
+    {% for answer in answers %}
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                <div><h5 class="mb-1">Question {{ answer.question.order }}</h5><span class="text-muted">{{ answer.question.marks }} marks · {{ answer.question.get_question_type_display }}</span></div>
+                {% if answer.is_marked_for_review %}<span class="badge bg-warning text-dark">Marked for review</span>{% endif %}
+                {% if answer.awarded_marks is not None %}<span class="badge {% if answer.awarded_marks > 0 %}bg-success{% elif answer.awarded_marks < 0 %}bg-danger{% else %}bg-secondary{% endif %}">{{ answer.awarded_marks }} / {{ answer.question.marks }}</span>{% elif answer.question.question_type == "SHORT_ANSWER" and answer.answer_text %}<span class="badge bg-warning text-dark">Awaiting evaluation</span>{% endif %}
+            </div>
+            <div class="mb-3">{{ answer.question.question_text|linebreaks }}</div>
+
+            {% if answer.question.question_type == "MCQ_SINGLE" %}
+                <div class="small text-muted mb-1">Student answer</div>
+                {% if answer.selected_option %}<div class="border rounded p-2 mb-3">{{ answer.selected_option.option_text }}</div>{% else %}<div class="text-muted mb-3">Not answered</div>{% endif %}
+                <div class="small text-muted mb-1">Options</div>
+                <ul class="mb-3">{% for option in answer.question.options.all %}<li>{% if option.is_correct %}<strong class="text-success">{{ option.option_text }} (correct)</strong>{% else %}{{ option.option_text }}{% endif %}</li>{% endfor %}</ul>
+            {% elif answer.question.question_type == "MCQ_MULTI" %}
+                <div class="small text-muted mb-1">Student answers</div>
+                {% for option in answer.selected_options.all %}<div class="border rounded p-2 mb-2">{{ option.option_text }}</div>{% empty %}<div class="text-muted mb-3">Not answered</div>{% endfor %}
+                <div class="small text-muted mb-1">Correct options</div>
+                <ul class="mb-3">{% for option in answer.question.options.all %}{% if option.is_correct %}<li class="text-success">{{ option.option_text }}</li>{% endif %}{% endfor %}</ul>
+            {% else %}
+                <div class="small text-muted mb-1">Student answer</div>
+                {% if answer.answer_text %}<div class="border rounded p-3 mb-3">{{ answer.answer_text|linebreaks }}</div>{% else %}<div class="text-muted mb-3">Not answered</div>{% endif %}
+                {% if answer.question.correct_answer %}<div class="small text-muted mb-1">Expected answer</div><div class="border rounded p-3">{{ answer.question.correct_answer|linebreaks }}</div>{% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info">No answers were recorded for this attempt.</div>
+    {% endfor %}
+</div>
+{% endblock %}

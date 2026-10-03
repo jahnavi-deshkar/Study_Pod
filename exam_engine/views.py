@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +17,24 @@ from .models import (
     AssessmentAttempt,
     StudentAnswer,
 )
+
+
+def _availability_error(assessment, now=None):
+    """Return a student-facing explanation when an assessment is unavailable."""
+    now = now or timezone.now()
+
+    if not assessment.is_published:
+        return "This assessment is not available yet."
+    if assessment.available_from and now < assessment.available_from:
+        return "This assessment is not available yet. Please check back later."
+    if assessment.due_date and now > assessment.due_date:
+        return "The deadline for this assessment has passed."
+    return None
+
+
+def _attempt_expired(attempt, now=None):
+    now = now or timezone.now()
+    return attempt.expires_at is not None and now >= attempt.expires_at
 
 
 # =========================================================
@@ -68,211 +86,119 @@ def question_create(request, assessment_id):
         )
         return redirect("dashboard")
 
-    # Automatically determine the next question number.
-    next_question_number = (
-        assessment.questions.count() + 1
-    )
+    next_question_number = assessment.questions.count() + 1
 
     if request.method == "POST":
+        action = request.POST.get("action", "next")
+        question_text = (request.POST.get("question_text") or "").strip()
+        question_type = request.POST.get("question_type")
+        option_texts = request.POST.getlist("option_text")
+        correct_options = set(request.POST.getlist("correct_option"))
+        valid_types = {value for value, _label in Question.QuestionType.choices}
 
-        action = request.POST.get(
-            "action",
-            "next"
-        )
+        errors = []
+        if not question_text:
+            errors.append("Please enter the question text.")
+        if question_type not in valid_types:
+            errors.append("Please select a valid question type.")
 
-        question_text = request.POST.get(
-            "question_text"
-        )
+        try:
+            marks = int(request.POST.get("marks", ""))
+            if marks < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            marks = 1
+            errors.append("Marks must be a positive whole number.")
 
-        question_type = request.POST.get(
-            "question_type"
-        )
+        clean_options = [text.strip() for text in option_texts]
+        nonempty_option_indexes = {
+            str(index) for index, text in enumerate(clean_options) if text
+        }
+        correct_nonempty = correct_options & nonempty_option_indexes
+        if question_type in (
+            Question.QuestionType.MCQ_SINGLE,
+            Question.QuestionType.MCQ_MULTI,
+        ):
+            if len([text for text in clean_options if text]) < 2:
+                errors.append("MCQ questions must have at least two non-empty options.")
+            if not correct_nonempty:
+                errors.append("Select at least one correct option for this MCQ.")
+            if question_type == Question.QuestionType.MCQ_SINGLE and len(correct_nonempty) != 1:
+                errors.append("Select exactly one correct option for a single-correct MCQ.")
 
-        marks = request.POST.get(
-            "marks"
-        )
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return redirect("question_create", assessment_id=assessment.id)
 
-        negative_marks = request.POST.get(
-            "negative_marks"
-        )
+        negative_marks = request.POST.get("negative_marks") or 0
+        try:
+            negative_marks = Decimal(negative_marks)
+            if negative_marks < 0:
+                raise ValueError
+        except Exception:
+            messages.error(request, "Negative marks must be zero or greater.")
+            return redirect("question_create", assessment_id=assessment.id)
 
-        negative_marking = (
-            request.POST.get("negative_marking") == "on"
-        )
+        time_limit_hours = request.POST.get("time_limit_hours") or 0
+        time_limit_minutes = request.POST.get("time_limit_minutes") or 0
+        try:
+            time_limit_hours = max(0, int(time_limit_hours))
+            time_limit_minutes = int(time_limit_minutes)
+            if time_limit_minutes < 0 or time_limit_minutes > 59:
+                raise ValueError
+        except (TypeError, ValueError):
+            messages.error(request, "Question time must use non-negative hours and 0–59 minutes.")
+            return redirect("question_create", assessment_id=assessment.id)
 
-        # Per-question timing
-        time_limit_hours = request.POST.get(
-            "time_limit_hours"
-        ) or 0
-
-        time_limit_minutes = request.POST.get(
-            "time_limit_minutes"
-        ) or 0
-
-        if not all([
-            question_text,
-            question_type,
-            marks,
-        ]):
-
-            messages.error(
-                request,
-                "Please fill in all required fields."
-            )
-
-            return redirect(
-                "question_create",
-                assessment_id=assessment.id
-            )
-
-        # If timing is not per-question,
-        # do not store question-level timing.
         if assessment.timing_mode != Assessment.TimingMode.PER_QUESTION:
-
             time_limit_hours = 0
             time_limit_minutes = 0
 
-        # Automatically assign question number.
+        correct_answer = ""
+        if question_type == Question.QuestionType.TRUE_FALSE:
+            correct_answer = request.POST.get("true_false_answer", "")
+            if correct_answer not in ("True", "False"):
+                messages.error(request, "Select the correct True / False answer.")
+                return redirect("question_create", assessment_id=assessment.id)
+        elif question_type == Question.QuestionType.NUMERICAL:
+            correct_answer = (request.POST.get("numerical_answer") or "").strip()
+            if not correct_answer:
+                messages.error(request, "Enter the correct numerical answer.")
+                return redirect("question_create", assessment_id=assessment.id)
+        elif question_type == Question.QuestionType.SHORT_ANSWER:
+            correct_answer = (request.POST.get("short_answer") or "").strip()
+
         question = Question.objects.create(
             assessment=assessment,
             question_text=question_text,
             question_type=question_type,
             marks=marks,
-            negative_marking=negative_marking,
-            negative_marks=negative_marks or 0,
+            negative_marking=request.POST.get("negative_marking") == "on",
+            negative_marks=negative_marks,
+            correct_answer=correct_answer,
             time_limit_hours=time_limit_hours,
             time_limit_minutes=time_limit_minutes,
             order=next_question_number,
         )
 
-        # -------------------------------------------------
-        # Save MCQ options
-        # -------------------------------------------------
+        if question_type in (Question.QuestionType.MCQ_SINGLE, Question.QuestionType.MCQ_MULTI):
+            for index, option_text in enumerate(clean_options):
+                if option_text:
+                    QuestionOption.objects.create(
+                        question=question,
+                        option_text=option_text,
+                        is_correct=str(index) in correct_options,
+                        order=index + 1,
+                    )
 
-        if question_type in [
-            Question.QuestionType.MCQ_SINGLE,
-            Question.QuestionType.MCQ_MULTI,
-        ]:
+        for index, image in enumerate(request.FILES.getlist("question_images")):
+            QuestionImage.objects.create(question=question, image=image, order=index + 1)
 
-            option_texts = request.POST.getlist(
-                "option_text"
-            )
-
-            correct_options = request.POST.getlist(
-                "correct_option"
-            )
-
-            for index, option_text in enumerate(
-                option_texts
-            ):
-
-                if not option_text.strip():
-                    continue
-
-                is_correct = (
-                    str(index) in correct_options
-                )
-
-                QuestionOption.objects.create(
-                    question=question,
-                    option_text=option_text,
-                    is_correct=is_correct,
-                    order=index + 1,
-                )
-
-        # -------------------------------------------------
-        # Save True / False answer
-        # -------------------------------------------------
-
-        elif question_type == Question.QuestionType.TRUE_FALSE:
-
-            correct_answer = request.POST.get(
-                "true_false_answer",
-                ""
-            )
-
-            question.correct_answer = correct_answer
-
-            question.save(
-                update_fields=["correct_answer"]
-            )
-
-        # -------------------------------------------------
-        # Save Numerical answer
-        # -------------------------------------------------
-
-        elif question_type == Question.QuestionType.NUMERICAL:
-
-            correct_answer = request.POST.get(
-                "numerical_answer",
-                ""
-            )
-
-            question.correct_answer = correct_answer
-
-            question.save(
-                update_fields=["correct_answer"]
-            )
-
-        # -------------------------------------------------
-        # Save Short Answer
-        # -------------------------------------------------
-
-        elif question_type == Question.QuestionType.SHORT_ANSWER:
-
-            correct_answer = request.POST.get(
-                "short_answer",
-                ""
-            )
-
-            question.correct_answer = correct_answer
-
-            question.save(
-                update_fields=["correct_answer"]
-            )
-
-        # -------------------------------------------------
-        # Save question images
-        # -------------------------------------------------
-
-        uploaded_images = request.FILES.getlist(
-            "question_images"
-        )
-
-        for index, image in enumerate(
-            uploaded_images
-        ):
-
-            QuestionImage.objects.create(
-                question=question,
-                image=image,
-                order=index + 1,
-            )
-
-        messages.success(
-            request,
-            f"Question {next_question_number} saved successfully."
-        )
-
-        # -------------------------------------------------
-        # Complete Test Making
-        # -------------------------------------------------
-
+        messages.success(request, f"Question {next_question_number} saved successfully.")
         if action == "complete":
-
-            return redirect(
-                "test_preview",
-                assessment_id=assessment.id
-            )
-
-        # -------------------------------------------------
-        # Save & Next Question
-        # -------------------------------------------------
-
-        return redirect(
-            "question_create",
-            assessment_id=assessment.id
-        )
+            return redirect("test_preview", assessment_id=assessment.id)
+        return redirect("question_create", assessment_id=assessment.id)
 
     return render(
         request,
@@ -307,6 +233,20 @@ def test_preview(request, assessment_id):
         )
 
         return redirect("dashboard")
+
+    if request.method == "POST":
+        if request.POST.get("action") == "publish":
+            if not assessment.questions.exists():
+                messages.error(request, "Add at least one question before publishing this assessment.")
+            else:
+                assessment.is_published = True
+                assessment.save(update_fields=["is_published"])
+                messages.success(request, "Assessment published for students.")
+        elif request.POST.get("action") == "unpublish":
+            assessment.is_published = False
+            assessment.save(update_fields=["is_published"])
+            messages.success(request, "Assessment is no longer available to students.")
+        return redirect("test_preview", assessment_id=assessment.id)
 
     questions = assessment.questions.prefetch_related(
         "options",
@@ -357,7 +297,8 @@ def student_assessments(request):
         )
 
     assessments = Assessment.objects.filter(
-        student_class=student.student_class
+        student_class=student.student_class,
+        is_published=True,
     ).select_related(
         "subject",
         "teacher",
@@ -400,7 +341,8 @@ def student_assessment_instructions(request, assessment_id):
 
     assessment = Assessment.objects.filter(
         id=assessment_id,
-        student_class=student.student_class
+        student_class=student.student_class,
+        is_published=True,
     ).select_related(
         "subject",
         "teacher",
@@ -414,6 +356,11 @@ def student_assessment_instructions(request, assessment_id):
             "Assessment not found or you do not have access to it."
         )
 
+        return redirect("student_assessments")
+
+    availability_error = _availability_error(assessment)
+    if availability_error:
+        messages.error(request, availability_error)
         return redirect("student_assessments")
 
     questions = assessment.questions.all()
@@ -450,7 +397,8 @@ def student_test(request, assessment_id):
 
     assessment = Assessment.objects.filter(
         id=assessment_id,
-        student_class=student.student_class
+        student_class=student.student_class,
+        is_published=True,
     ).first()
 
     if not assessment:
@@ -458,6 +406,18 @@ def student_test(request, assessment_id):
             request,
             "Assessment not found or you do not have access to it."
         )
+        return redirect("student_assessments")
+
+    availability_error = _availability_error(assessment)
+    if availability_error:
+        existing_attempt = AssessmentAttempt.objects.filter(
+            assessment=assessment,
+            student=student,
+            status=AssessmentAttempt.Status.IN_PROGRESS,
+        ).first()
+        if existing_attempt and assessment.due_date and timezone.now() > assessment.due_date:
+            return redirect("student_submit", assessment_id=assessment.id)
+        messages.error(request, availability_error)
         return redirect("student_assessments")
 
     questions = list(
@@ -484,15 +444,21 @@ def student_test(request, assessment_id):
     # Get or create student's attempt
     # -------------------------------------------------
 
+    started_at = timezone.now()
+    if assessment.timing_mode == Assessment.TimingMode.ENTIRE_TEST:
+        expires_at = started_at + timedelta(
+            hours=assessment.duration_hours,
+            minutes=assessment.duration_minutes
+        )
+    else:
+        expires_at = None
+
     attempt, created = AssessmentAttempt.objects.get_or_create(
         assessment=assessment,
         student=student,
         defaults={
-            "started_at": timezone.now(),
-            "expires_at": timezone.now() + timedelta(
-                hours=assessment.duration_hours,
-                minutes=assessment.duration_minutes
-            ),
+            "started_at": started_at,
+            "expires_at": expires_at,
             "status": AssessmentAttempt.Status.IN_PROGRESS,
         }
     )
@@ -518,7 +484,7 @@ def student_test(request, assessment_id):
     # so all objective answers are graded correctly.
     # -------------------------------------------------
 
-    if timezone.now() >= attempt.expires_at:
+    if _attempt_expired(attempt):
 
         messages.warning(
             request,
@@ -553,6 +519,33 @@ def student_test(request, assessment_id):
         question_number - 1
     ]
 
+    existing_answer, _ = StudentAnswer.objects.get_or_create(
+        attempt=attempt,
+        question=question,
+    )
+    if (
+        assessment.timing_mode == Assessment.TimingMode.PER_QUESTION
+        and existing_answer.question_expires_at is None
+        and (question.time_limit_hours or question.time_limit_minutes)
+    ):
+        existing_answer.question_expires_at = timezone.now() + timedelta(
+            hours=question.time_limit_hours,
+            minutes=question.time_limit_minutes,
+        )
+        existing_answer.save(update_fields=["question_expires_at"])
+
+    if (
+        assessment.timing_mode == Assessment.TimingMode.PER_QUESTION
+        and existing_answer.question_expires_at
+        and timezone.now() >= existing_answer.question_expires_at
+    ):
+        messages.warning(request, "Time for this question has ended.")
+        if question_number < len(questions):
+            return redirect(
+                f"{reverse('student_test', kwargs={'assessment_id': assessment.id})}?question={question_number + 1}"
+            )
+        return redirect("student_submit", assessment_id=assessment.id)
+
     # -------------------------------------------------
     # SAVE ANSWER + NAVIGATION
     # -------------------------------------------------
@@ -586,11 +579,28 @@ def student_test(request, assessment_id):
             posted_question_number - 1
         ]
 
+        question_answer = StudentAnswer.objects.filter(
+            attempt=attempt,
+            question=question,
+        ).first()
+        if (
+            assessment.timing_mode == Assessment.TimingMode.PER_QUESTION
+            and question_answer
+            and question_answer.question_expires_at
+            and timezone.now() >= question_answer.question_expires_at
+        ):
+            messages.warning(request, "Time for this question has ended.")
+            if posted_question_number < len(questions):
+                return redirect(
+                    f"{reverse('student_test', kwargs={'assessment_id': assessment.id})}?question={posted_question_number + 1}"
+                )
+            return redirect("student_submit", assessment_id=assessment.id)
+
         # -------------------------------------------------
         # Check expiry again immediately before saving
         # -------------------------------------------------
 
-        if timezone.now() >= attempt.expires_at:
+        if _attempt_expired(attempt):
 
             messages.warning(
                 request,
@@ -690,6 +700,9 @@ def student_test(request, assessment_id):
         else:
 
             student_answer.selected_options.clear()
+
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse({"saved": True})
 
         # -------------------------------------------------
         # Mark / Unmark for review
@@ -898,6 +911,11 @@ def student_test(request, assessment_id):
             "question_count": len(questions),
             "existing_answer": existing_answer,
             "question_navigation": question_navigation,
+            "timer_deadline": (
+                existing_answer.question_expires_at
+                if assessment.timing_mode == Assessment.TimingMode.PER_QUESTION
+                else attempt.expires_at
+            ),
         }
     )
 
@@ -958,8 +976,10 @@ def student_submit(request, assessment_id):
     # Determine whether this was a time-expired submit
     # -------------------------------------------------
 
+    now = timezone.now()
     time_expired = (
-        timezone.now() >= attempt.expires_at
+        _attempt_expired(attempt, now)
+        or (assessment.due_date is not None and now > assessment.due_date)
     )
 
     questions = assessment.questions.prefetch_related(

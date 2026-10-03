@@ -1,500 +1,178 @@
-@login_required
-def student_test(request, assessment_id):
-
-    if request.user.role != "STUDENT":
-        return redirect("dashboard")
-
-    student = request.user.student_profile
-
-    if not student.student_class:
-        messages.error(
-            request,
-            "You are not assigned to a class."
-        )
-        return redirect("student_assessments")
-
-    assessment = Assessment.objects.filter(
-        id=assessment_id,
-        student_class=student.student_class
-    ).first()
-
-    if not assessment:
-        messages.error(
-            request,
-            "Assessment not found or you do not have access to it."
-        )
-        return redirect("student_assessments")
-
-    questions = list(
-        assessment.questions.prefetch_related(
-            "options",
-            "images"
-        ).order_by(
-            "order",
-            "id"
-        )
-    )
-
-    if not questions:
-        messages.error(
-            request,
-            "This assessment does not have any questions yet."
-        )
-
-        return redirect(
-            "student_assessment_instructions",
-            assessment_id=assessment.id
-        )
-
-    # =================================================
-    # GET OR CREATE ATTEMPT
-    # =================================================
-
-    attempt, created = AssessmentAttempt.objects.get_or_create(
-        assessment=assessment,
-        student=student,
-        defaults={
-            "started_at": timezone.now(),
-            "expires_at": timezone.now() + timedelta(
-                hours=assessment.duration_hours,
-                minutes=assessment.duration_minutes
-            ),
-            "status": AssessmentAttempt.Status.IN_PROGRESS,
-        }
-    )
-
-    # =================================================
-    # PREVENT REOPENING SUBMITTED TEST
-    # =================================================
-
-    if attempt.status != AssessmentAttempt.Status.IN_PROGRESS:
-
-        messages.info(
-            request,
-            "This assessment has already been submitted."
-        )
-
-        return redirect(
-            "student_result",
-            assessment_id=assessment.id
-        )
-
-    # =================================================
-    # CHECK TIMER EXPIRY
-    # =================================================
-
-    if timezone.now() >= attempt.expires_at:
-
-        attempt.status = AssessmentAttempt.Status.TIME_EXPIRED
-        attempt.submitted_at = timezone.now()
-
-        attempt.save(
-            update_fields=[
-                "status",
-                "submitted_at"
-            ]
-        )
-
-        messages.warning(
-            request,
-            "Time is up. Your test has been automatically submitted."
-        )
-
-        return redirect(
-            "student_result",
-            assessment_id=assessment.id
-        )
-
-    # =================================================
-    # CURRENT QUESTION
-    # =================================================
-
-    try:
-
-        question_number = int(
-            request.GET.get(
-                "question",
-                1
-            )
-        )
-
-    except (TypeError, ValueError):
-
-        question_number = 1
-
-    if question_number < 1:
-        question_number = 1
-
-    if question_number > len(questions):
-        question_number = len(questions)
-
-    question = questions[
-        question_number - 1
-    ]
-
-    # =================================================
-    # SAVE / NAVIGATE
-    # =================================================
-
-    if request.method == "POST":
-
-        # -------------------------------------------------
-        # Get submitted question number
-        # -------------------------------------------------
-
-        try:
-
-            posted_question_number = int(
-                request.POST.get(
-                    "question_number",
-                    question_number
-                )
-            )
-
-        except (TypeError, ValueError):
-
-            posted_question_number = question_number
-
-        # -------------------------------------------------
-        # Validate question number
-        # -------------------------------------------------
-
-        if (
-            posted_question_number < 1
-            or posted_question_number > len(questions)
-        ):
-
-            messages.error(
-                request,
-                "Invalid question."
-            )
-
-            return redirect(
-                "student_test",
-                assessment_id=assessment.id
-            )
-
-        question = questions[
-            posted_question_number - 1
-        ]
-
-        # -------------------------------------------------
-        # Check expiry before saving
-        # -------------------------------------------------
-
-        if timezone.now() >= attempt.expires_at:
-
-            attempt.status = AssessmentAttempt.Status.TIME_EXPIRED
-            attempt.submitted_at = timezone.now()
-
-            attempt.save(
-                update_fields=[
-                    "status",
-                    "submitted_at"
-                ]
-            )
-
-            messages.warning(
-                request,
-                "Time is up. Your test has been automatically submitted."
-            )
-
-            return redirect(
-                "student_result",
-                assessment_id=assessment.id
-            )
-
-        # =================================================
-        # READ ACTION
-        # =================================================
-
-        action = request.POST.get(
-            "action",
-            "next"
-        )
-
-        # =================================================
-        # READ ANSWER
-        # =================================================
-
-        selected_option = None
-        selected_options = []
-        answer_text = ""
-
-        if question.question_type == Question.QuestionType.MCQ_SINGLE:
-
-            option_id = request.POST.get(
-                "answer"
-            )
-
-            if option_id:
-
-                selected_option = question.options.filter(
-                    id=option_id
-                ).first()
-
-        elif question.question_type == Question.QuestionType.MCQ_MULTI:
-
-            option_ids = request.POST.getlist(
-                "answer"
-            )
-
-            selected_options = list(
-                question.options.filter(
-                    id__in=option_ids
-                )
-            )
-
-        else:
-
-            answer_text = request.POST.get(
-                "answer",
-                ""
-            ).strip()
-
-        # =================================================
-        # MARK FOR REVIEW
-        # =================================================
-
-        mark_for_review = (
-            request.POST.get("mark_for_review") == "true"
-        )
-
-        # =================================================
-        # CREATE / UPDATE ANSWER
-        # =================================================
-
-        student_answer, created_answer = (
-            StudentAnswer.objects.get_or_create(
-                attempt=attempt,
-                question=question
-            )
-        )
-
-        student_answer.selected_option = selected_option
-        student_answer.answer_text = answer_text
-        student_answer.is_marked_for_review = mark_for_review
-
-        student_answer.save()
-
-        # =================================================
-        # MULTIPLE CHOICE ANSWERS
-        # =================================================
-
-        if question.question_type == Question.QuestionType.MCQ_MULTI:
-
-            student_answer.selected_options.set(
-                selected_options
-            )
-
-        else:
-
-            student_answer.selected_options.clear()
-
-        # =================================================
-        # DIRECT QUESTION NAVIGATION
-        # =================================================
-
-        if action == "jump":
-
-            try:
-
-                target_question = int(
-                    request.POST.get(
-                        "target_question",
-                        1
-                    )
-                )
-
-            except (TypeError, ValueError):
-
-                target_question = 1
-
-            if target_question < 1:
-                target_question = 1
-
-            if target_question > len(questions):
-                target_question = len(questions)
-
-            next_url = reverse(
-                "student_test",
-                kwargs={
-                    "assessment_id": assessment.id
-                }
-            )
-
-            next_url += (
-                f"?question={target_question}"
-            )
-
-            return HttpResponseRedirect(
-                next_url
-            )
-
-        # =================================================
-        # PREVIOUS QUESTION
-        # =================================================
-
-        if action == "previous":
-
-            previous_question = (
-                posted_question_number - 1
-            )
-
-            if previous_question < 1:
-                previous_question = 1
-
-            previous_url = reverse(
-                "student_test",
-                kwargs={
-                    "assessment_id": assessment.id
-                }
-            )
-
-            previous_url += (
-                f"?question={previous_question}"
-            )
-
-            return HttpResponseRedirect(
-                previous_url
-            )
-
-        # =================================================
-        # NEXT QUESTION
-        # =================================================
-
-        if action == "next":
-
-            next_question_number = (
-                posted_question_number + 1
-            )
-
-            if next_question_number <= len(questions):
-
-                next_url = reverse(
-                    "student_test",
-                    kwargs={
-                        "assessment_id": assessment.id
-                    }
-                )
-
-                next_url += (
-                    f"?question={next_question_number}"
-                )
-
-                return HttpResponseRedirect(
-                    next_url
-                )
-
-            # Last question
-            return redirect(
-                "student_submit",
-                assessment_id=assessment.id
-            )
-
-        # =================================================
-        # SUBMIT TEST
-        # =================================================
-
-        if action == "submit":
-
-            return redirect(
-                "student_submit",
-                assessment_id=assessment.id
-            )
-
-        # Fallback
-        return redirect(
-            "student_test",
-            assessment_id=assessment.id
-        )
-
-    # =================================================
-    # LOAD EXISTING ANSWER
-    # =================================================
-
-    existing_answer = StudentAnswer.objects.filter(
-        attempt=attempt,
-        question=question
-    ).first()
-
-    # =================================================
-    # LOAD ALL ANSWERS FOR NAVIGATOR
-    # =================================================
-
-    student_answers = {
-        answer.question_id: answer
-        for answer in StudentAnswer.objects.filter(
-            attempt=attempt
-        ).prefetch_related(
-            "selected_options"
-        )
+{% extends "accounts/base.html" %}
+
+{% block title %}{{ assessment.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="mb-1">{{ assessment.title }}</h2>
+            <div class="text-muted">{{ assessment.subject.name }} · Question {{ question_number }} of {{ question_count }}</div>
+        </div>
+        {% if timer_deadline %}
+        <div class="card shadow-sm" id="timerCard">
+            <div class="card-body py-2 px-3 text-center">
+                <div class="small text-muted">{% if assessment.timing_mode == "PER_QUESTION" %}Time for this question{% else %}Time remaining{% endif %}</div>
+                <div class="fs-4 fw-bold" id="countdown" data-deadline="{{ timer_deadline|date:'c' }}">--:--</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form method="post" id="answerForm" action="?question={{ question_number }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="question_number" value="{{ question_number }}">
+                        <input type="hidden" name="action" id="formAction" value="next">
+                        <input type="hidden" name="target_question" id="targetQuestion" value="">
+
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h4 class="mb-0">Question {{ question_number }}</h4>
+                            <span class="badge bg-primary">{{ question.marks }} mark{{ question.marks|pluralize }}</span>
+                        </div>
+                        <div class="fs-5 mb-4">{{ question.question_text|linebreaks }}</div>
+
+                        {% for image in question.images.all %}
+                        <div class="mb-3"><img src="{{ image.image.url }}" alt="Question image" class="img-fluid rounded" style="max-height: 400px;"></div>
+                        {% endfor %}
+
+                        {% if question.question_type == "MCQ_SINGLE" %}
+                            {% for option in question.options.all %}
+                            <label class="d-block border rounded p-3 mb-2">
+                                <input class="form-check-input me-2 answer-input" type="radio" name="answer" value="{{ option.id }}" {% if existing_answer.selected_option_id == option.id %}checked{% endif %}>
+                                {{ option.option_text }}
+                            </label>
+                            {% endfor %}
+                        {% elif question.question_type == "MCQ_MULTI" %}
+                            <p class="text-muted small">Select all correct answers.</p>
+                            {% for option in question.options.all %}
+                            <label class="d-block border rounded p-3 mb-2">
+                                <input class="form-check-input me-2 answer-input" type="checkbox" name="answer" value="{{ option.id }}" {% if option in existing_answer.selected_options.all %}checked{% endif %}>
+                                {{ option.option_text }}
+                            </label>
+                            {% endfor %}
+                        {% elif question.question_type == "TRUE_FALSE" %}
+                            <label class="d-block border rounded p-3 mb-2"><input class="form-check-input me-2 answer-input" type="radio" name="answer" value="True" {% if existing_answer.answer_text == "True" %}checked{% endif %}>True</label>
+                            <label class="d-block border rounded p-3 mb-2"><input class="form-check-input me-2 answer-input" type="radio" name="answer" value="False" {% if existing_answer.answer_text == "False" %}checked{% endif %}>False</label>
+                        {% elif question.question_type == "NUMERICAL" %}
+                            <label for="textAnswer" class="form-label">Your answer</label>
+                            <input id="textAnswer" class="form-control answer-input" type="text" name="answer" value="{{ existing_answer.answer_text }}" autocomplete="off">
+                        {% else %}
+                            <label for="textAnswer" class="form-label">Your answer</label>
+                            <textarea id="textAnswer" class="form-control answer-input" name="answer" rows="5">{{ existing_answer.answer_text }}</textarea>
+                        {% endif %}
+
+                        <div class="d-flex flex-wrap justify-content-between gap-2 mt-4">
+                            <button type="submit" name="action" value="previous" class="btn btn-outline-secondary" {% if question_number == 1 %}disabled{% endif %}>Previous</button>
+                            <button type="submit" name="action" value="review" class="btn btn-outline-warning">{% if existing_answer.is_marked_for_review %}Remove Review Mark{% else %}Mark for Review{% endif %}</button>
+                            {% if question_number == question_count %}
+                            <button type="submit" name="action" value="submit" class="btn btn-success">Submit Assessment</button>
+                            {% else %}
+                            <button type="submit" name="action" value="next" class="btn btn-primary">Save &amp; Next</button>
+                            {% endif %}
+                        </div>
+                    </form>
+                    <div id="saveStatus" class="small text-muted mt-3" aria-live="polite"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="mb-3">Question Navigator</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for item in question_navigation %}
+                        <button type="button" class="btn btn-sm {% if item.current %}btn-primary{% elif item.marked %}btn-warning{% elif item.answered %}btn-success{% else %}btn-outline-secondary{% endif %} jump-question" data-number="{{ item.number }}" aria-label="Go to question {{ item.number }}">{{ item.number }}</button>
+                        {% endfor %}
+                    </div>
+                    <hr>
+                    <div class="small text-muted">
+                        <div><span class="badge bg-success">&nbsp;</span> Answered</div>
+                        <div class="mt-1"><span class="badge bg-warning">&nbsp;</span> Marked for review</div>
+                        <div class="mt-1"><span class="badge bg-secondary">&nbsp;</span> Unanswered</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const form = document.getElementById("answerForm");
+    const action = document.getElementById("formAction");
+    const targetQuestion = document.getElementById("targetQuestion");
+    const saveStatus = document.getElementById("saveStatus");
+    let saveTimer;
+
+    function autosave() {
+        const data = new FormData(form);
+        data.set("action", "stay");
+        saveStatus.textContent = "Saving…";
+        fetch(form.action, {
+            method: "POST",
+            body: data,
+            headers: {"X-Requested-With": "XMLHttpRequest"},
+            credentials: "same-origin"
+        }).then(function (response) {
+            if (!response.ok) throw new Error("Save failed");
+            return response.json();
+        }).then(function () {
+            saveStatus.textContent = "Saved";
+        }).catch(function () {
+            saveStatus.textContent = "Could not save yet. Your answer will be sent when you continue.";
+        });
     }
 
-    # =================================================
-    # BUILD QUESTION NAVIGATION DATA
-    # =================================================
+    form.addEventListener("input", function () {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(autosave, 500);
+    });
+    form.addEventListener("change", function () {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(autosave, 250);
+    });
+    form.addEventListener("submit", function () {
+        clearTimeout(saveTimer);
+    });
 
-    question_navigation = []
+    document.querySelectorAll(".jump-question").forEach(function (button) {
+        button.addEventListener("click", function () {
+            targetQuestion.value = button.dataset.number;
+            action.value = "jump";
+            form.requestSubmit();
+        });
+    });
 
-    for index, nav_question in enumerate(
-        questions,
-        start=1
-    ):
+    const countdown = document.getElementById("countdown");
+    if (!countdown) return;
+    const deadline = new Date(countdown.dataset.deadline).getTime();
+    const card = document.getElementById("timerCard");
+    let expired = false;
 
-        nav_answer = student_answers.get(
-            nav_question.id
-        )
-
-        is_answered = False
-        is_marked = False
-
-        if nav_answer:
-
-            is_marked = nav_answer.is_marked_for_review
-
-            if nav_question.question_type == Question.QuestionType.MCQ_SINGLE:
-
-                is_answered = (
-                    nav_answer.selected_option_id is not None
-                )
-
-            elif nav_question.question_type == Question.QuestionType.MCQ_MULTI:
-
-                is_answered = (
-                    nav_answer.selected_options.exists()
-                )
-
-            else:
-
-                is_answered = bool(
-                    nav_answer.answer_text.strip()
-                )
-
-        question_navigation.append(
-            {
-                "number": index,
-                "question_id": nav_question.id,
-                "answered": is_answered,
-                "marked": is_marked,
-                "current": index == question_number,
-            }
-        )
-
-    # =================================================
-    # RENDER
-    # =================================================
-
-    return render(
-        request,
-        "exam_engine/student_test.html",
-        {
-            "assessment": assessment,
-            "attempt": attempt,
-            "question": question,
-            "question_number": question_number,
-            "question_count": len(questions),
-            "existing_answer": existing_answer,
-            "question_navigation": question_navigation,
+    function updateTimer() {
+        const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+        const hours = Math.floor(remaining / 3600);
+        const minutes = Math.floor((remaining % 3600) / 60);
+        const seconds = remaining % 60;
+        countdown.textContent = [hours, minutes, seconds].map(function (value) {
+            return String(value).padStart(2, "0");
+        }).join(":");
+        if (remaining <= 300) card.classList.add("border-warning");
+        if (remaining <= 60) countdown.classList.add("text-danger");
+        if (remaining === 0 && !expired) {
+            expired = true;
+            saveStatus.textContent = "Time is up. Submitting this question…";
+            action.value = {{ question_number }} < {{ question_count }} ? "next" : "submit";
+            form.requestSubmit();
         }
-    )
+    }
+    updateTimer();
+    setInterval(updateTimer, 1000);
+})();
+</script>
+{% endblock %}

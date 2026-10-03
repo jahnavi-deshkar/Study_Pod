@@ -153,7 +153,10 @@ class AssessmentAttempt(models.Model):
 
     started_at = models.DateTimeField()
 
-    expires_at = models.DateTimeField()
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
 
     submitted_at = models.DateTimeField(
         null=True,
@@ -223,6 +226,11 @@ class StudentAnswer(models.Model):
 
     answered_at = models.DateTimeField(
         auto_now=True
+    )
+
+    question_expires_at = models.DateTimeField(
+        null=True,
+        blank=True
     )
 
     class Meta:

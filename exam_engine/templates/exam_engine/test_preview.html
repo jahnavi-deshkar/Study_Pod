@@ -423,6 +423,15 @@
             Add Another Question
         </a>
 
+        <form method="post" class="d-inline">
+            {% csrf_token %}
+            {% if assessment.is_published %}
+                <button type="submit" name="action" value="unpublish" class="btn btn-outline-warning">Unpublish</button>
+            {% else %}
+                <button type="submit" name="action" value="publish" class="btn btn-success">Publish for Students</button>
+            {% endif %}
+        </form>
+
     </div>
 
 </div>

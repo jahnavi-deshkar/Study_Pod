@@ -32,7 +32,7 @@
                         <td>{{ assessment.student_class }}</td>
                         <td>
                             {% if attempt.status == "IN_PROGRESS" %}<span class="badge bg-primary">{{ attempt.get_status_display }}</span>
-                            {% elif attempt.status == "TIME_EXPIRED" %}<span class="badge bg-warning text-dark">{{ attempt.get_status_display }}</span>
+                            {% elif attempt.status == "TIME_EXPIRED" or attempt.status == "NEEDS_EVALUATION" %}<span class="badge bg-warning text-dark">{{ attempt.get_status_display }}</span>
                             {% else %}<span class="badge bg-success">{{ attempt.get_status_display }}</span>{% endif %}
                         </td>
                         <td>{{ attempt.display_score }} / {{ assessment.total_marks }} <span class="text-muted">({{ attempt.display_percentage|floatformat:1 }}%)</span></td>

@@ -1,4 +1,7 @@
+from decimal import Decimal
+
 from django.db import models
+from django.db.models import Sum
 
 
 class Question(models.Model):
@@ -138,6 +141,8 @@ class AssessmentAttempt(models.Model):
         SUBMITTED = "SUBMITTED", "Submitted"
         TIME_EXPIRED = "TIME_EXPIRED", "Time Expired"
         LOCKED = "LOCKED", "Locked"
+        NEEDS_EVALUATION = "NEEDS_EVALUATION", "Needs Evaluation"
+        EVALUATED = "EVALUATED", "Evaluated"
 
     assessment = models.ForeignKey(
         "academics.Assessment",
@@ -180,6 +185,25 @@ class AssessmentAttempt(models.Model):
     def __str__(self):
         return f"{self.student} - {self.assessment.title}"
 
+    @property
+    def score(self):
+        total = self.answers.aggregate(total=Sum("awarded_marks"))["total"]
+        return total if total is not None else Decimal("0")
+
+    @property
+    def percentage(self):
+        total_marks = self.assessment.total_marks
+        if not total_marks:
+            return Decimal("0")
+        return (self.score / Decimal(str(total_marks))) * Decimal("100")
+
+    @property
+    def pending_evaluation_count(self):
+        return self.answers.filter(
+            question__question_type=Question.QuestionType.SHORT_ANSWER,
+            awarded_marks__isnull=True,
+        ).exclude(answer_text="").count()
+
 
 class StudentAnswer(models.Model):
 
@@ -210,6 +234,10 @@ class StudentAnswer(models.Model):
     )
 
     answer_text = models.TextField(
+        blank=True
+    )
+
+    teacher_feedback = models.TextField(
         blank=True
     )
 

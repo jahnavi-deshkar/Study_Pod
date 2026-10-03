@@ -190,6 +190,72 @@ class AssessmentFlowTests(TestCase):
         assessment.refresh_from_db()
         self.assertTrue(assessment.is_published)
 
+    def test_short_answer_submission_waits_for_teacher_and_result_updates(self):
+        assessment = self.make_assessment(total_marks=5)
+        objective_question = self.add_question(assessment)
+        short_question = Question.objects.create(
+            assessment=assessment,
+            question_text="Explain your reasoning.",
+            question_type=Question.QuestionType.SHORT_ANSWER,
+            marks=3,
+            order=2,
+        )
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=self.student,
+            started_at=timezone.now(),
+            expires_at=None,
+        )
+        StudentAnswer.objects.create(
+            attempt=attempt,
+            question=objective_question,
+            selected_option=objective_question.options.get(is_correct=True),
+        )
+        short_answer = StudentAnswer.objects.create(
+            attempt=attempt,
+            question=short_question,
+            answer_text="Because the two quantities are equal.",
+        )
+
+        self.client.force_login(self.student_user)
+        response = self.client.post(reverse("student_submit", args=[assessment.id]))
+
+        self.assertRedirects(response, reverse("student_result", args=[assessment.id]))
+        attempt.refresh_from_db()
+        short_answer.refresh_from_db()
+        self.assertEqual(attempt.status, AssessmentAttempt.Status.NEEDS_EVALUATION)
+        self.assertEqual(short_answer.awarded_marks, None)
+        self.assertEqual(attempt.score, 2)
+
+        self.client.force_login(self.teacher_user)
+        detail_url = reverse("teacher_attempt_detail", args=[assessment.id, attempt.id])
+        response = self.client.post(detail_url, {
+            f"marks_awarded_{short_answer.id}": "4",
+            f"teacher_feedback_{short_answer.id}": "Good explanation.",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "must be between 0 and 3")
+        short_answer.refresh_from_db()
+        self.assertIsNone(short_answer.awarded_marks)
+
+        response = self.client.post(detail_url, {
+            f"marks_awarded_{short_answer.id}": "2.5",
+            f"teacher_feedback_{short_answer.id}": "Good explanation.",
+        })
+        self.assertRedirects(response, detail_url)
+        attempt.refresh_from_db()
+        short_answer.refresh_from_db()
+        self.assertEqual(attempt.status, AssessmentAttempt.Status.EVALUATED)
+        self.assertEqual(attempt.score, 4.5)
+        self.assertEqual(attempt.percentage, 90)
+        self.assertEqual(short_answer.teacher_feedback, "Good explanation.")
+
+        self.client.force_login(self.student_user)
+        result = self.client.get(reverse("student_result", args=[assessment.id]))
+        self.assertContains(result, "Evaluated")
+        self.assertContains(result, "Good explanation.")
+        self.assertContains(result, "90.0%")
+
     def test_teacher_attempt_templates_render_and_routes_resolve(self):
         assessment = self.make_assessment()
         question = self.add_question(assessment)

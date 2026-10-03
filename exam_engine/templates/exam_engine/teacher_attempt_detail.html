@@ -26,13 +26,21 @@
     </div>
 
     <h4 class="mb-3">Answers</h4>
+    {% if grading_errors %}
+    <div class="alert alert-danger" role="alert">
+        {% for error in grading_errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post">
+    {% csrf_token %}
     {% for answer in answers %}
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3 {% if answer.needs_evaluation %}border-warning{% endif %}">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                 <div><h5 class="mb-1">Question {{ answer.question.order }}</h5><span class="text-muted">{{ answer.question.marks }} marks · {{ answer.question.get_question_type_display }}</span></div>
                 {% if answer.is_marked_for_review %}<span class="badge bg-warning text-dark">Marked for review</span>{% endif %}
-                {% if answer.awarded_marks is not None %}<span class="badge {% if answer.awarded_marks > 0 %}bg-success{% elif answer.awarded_marks < 0 %}bg-danger{% else %}bg-secondary{% endif %}">{{ answer.awarded_marks }} / {{ answer.question.marks }}</span>{% elif answer.question.question_type == "SHORT_ANSWER" and answer.answer_text %}<span class="badge bg-warning text-dark">Awaiting evaluation</span>{% endif %}
+                {% if answer.question.question_type == "SHORT_ANSWER" and not answer.answer_text %}<span class="badge bg-secondary">Unanswered</span>{% elif answer.awarded_marks is not None %}<span class="badge {% if answer.question.question_type == "SHORT_ANSWER" or answer.awarded_marks > 0 %}bg-success{% elif answer.awarded_marks < 0 %}bg-danger{% else %}bg-secondary{% endif %}">{{ answer.awarded_marks }} / {{ answer.question.marks }}</span>{% elif answer.needs_evaluation %}<span class="badge bg-warning text-dark">Awaiting evaluation</span>{% endif %}
             </div>
             <div class="mb-3">{{ answer.question.question_text|linebreaks }}</div>
 
@@ -50,11 +58,36 @@
                 <div class="small text-muted mb-1">Student answer</div>
                 {% if answer.answer_text %}<div class="border rounded p-3 mb-3">{{ answer.answer_text|linebreaks }}</div>{% else %}<div class="text-muted mb-3">Not answered</div>{% endif %}
                 {% if answer.question.correct_answer %}<div class="small text-muted mb-1">Expected answer</div><div class="border rounded p-3">{{ answer.question.correct_answer|linebreaks }}</div>{% endif %}
+                {% if answer.question.question_type == "SHORT_ANSWER" %}
+                    {% if answer.needs_evaluation %}
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-4">
+                            <label class="form-label" for="marks-{{ answer.id }}">Marks awarded (0–{{ answer.question.marks }})</label>
+                            <input id="marks-{{ answer.id }}" class="form-control" type="number" name="marks_awarded_{{ answer.id }}" min="0" max="{{ answer.question.marks }}" step="0.01" value="{{ answer.grading_marks_value }}" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="feedback-{{ answer.id }}">Teacher feedback</label>
+                            <textarea id="feedback-{{ answer.id }}" class="form-control" name="teacher_feedback_{{ answer.id }}" rows="2">{{ answer.grading_feedback_value }}</textarea>
+                        </div>
+                    </div>
+                    {% elif answer.teacher_feedback %}
+                    <div class="alert alert-light border mt-3 mb-0">
+                        <strong>Teacher feedback</strong>
+                        <div>{{ answer.teacher_feedback|linebreaks }}</div>
+                    </div>
+                    {% endif %}
+                {% endif %}
             {% endif %}
         </div>
     </div>
     {% empty %}
     <div class="alert alert-info">No answers were recorded for this attempt.</div>
     {% endfor %}
+    {% if pending_manual_count %}
+    <div class="d-flex justify-content-end mb-5">
+        <button type="submit" class="btn btn-success">Submit Evaluation</button>
+    </div>
+    {% endif %}
+    </form>
 </div>
 {% endblock %}

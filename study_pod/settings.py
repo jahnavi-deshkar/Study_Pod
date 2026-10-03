@@ -74,6 +74,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'study_pod.urls'
+LOGIN_URL = "/login/"
 
 TEMPLATES = [
     {

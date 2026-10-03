@@ -357,6 +357,16 @@ class AnalyticsDashboardTests(TestCase):
         self.assertContains(response, "Algebra Test")
         self.assertContains(response, "Science Test")
 
+    def test_anonymous_analytics_redirects_to_the_configured_login_page(self):
+        response = self.client.get(reverse("student_analytics"))
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('student_analytics')}",
+        )
+        legacy_login = self.client.get("/accounts/login/?next=/academics/student/analytics/")
+        self.assertEqual(legacy_login.status_code, 200)
+        self.assertContains(legacy_login, "Login")
+
     def test_student_analytics_is_private_and_for_student_role_only(self):
         other_student_user = User.objects.create_user(
             username="analytics-student-two", password="test-pass", role=User.Role.STUDENT

@@ -4,6 +4,8 @@ from . import views
 
 urlpatterns = [
     path("login/", views.login_view, name="login"),
+    # Compatibility route for Django's historical login_required default.
+    path("accounts/login/", views.login_view, name="accounts_login_legacy"),
     path("logout/", views.logout_view, name="logout"),
 
     path("dashboard/", views.dashboard, name="dashboard"),

@@ -432,3 +432,98 @@ class AssessmentFlowTests(TestCase):
         self.assertEqual(assessment.passmark_percentage, 55.5)
         self.assertEqual(assessment.access_code, "CLASS-10")
         self.assertEqual(assessment.instructions, "Read every question carefully.")
+
+    def test_submitted_attempt_rejects_ajax_answer_changes(self):
+        assessment = self.make_assessment(max_attempts=0)
+        question = self.add_question(assessment)
+        original_option = question.options.get(is_correct=True)
+        changed_option = question.options.get(is_correct=False)
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=self.student,
+            started_at=timezone.now() - timedelta(minutes=1),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        answer = StudentAnswer.objects.create(
+            attempt=attempt,
+            question=question,
+            selected_option=original_option,
+            awarded_marks=question.marks,
+        )
+        self.client.force_login(self.student_user)
+
+        response = self.client.post(
+            reverse("student_test", args=[assessment.pk]),
+            {"question_number": "1", "action": "stay", "answer": str(changed_option.pk)},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        answer.refresh_from_db()
+        self.assertEqual(answer.selected_option_id, original_option.pk)
+        self.assertEqual(answer.awarded_marks, question.marks)
+
+    def test_student_result_and_attempt_access_are_scoped_to_logged_in_student(self):
+        assessment = self.make_assessment()
+        question = self.add_question(assessment)
+        other_user = User.objects.create_user(
+            username="other-assessment-student", password="test-pass", role=User.Role.STUDENT
+        )
+        other_student = StudentProfile.objects.create(
+            user=other_user, roll_number="S-OTHER", student_class=self.student_class
+        )
+        other_attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=other_student,
+            started_at=timezone.now(),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        StudentAnswer.objects.create(
+            attempt=other_attempt,
+            question=question,
+            answer_text="private answer",
+            awarded_marks=question.marks,
+        )
+        self.client.force_login(self.student_user)
+
+        result = self.client.get(reverse("student_result", args=[assessment.pk]))
+        self.assertRedirects(result, reverse("student_assessments"))
+        self.assertFalse(AssessmentAttempt.objects.filter(
+            assessment=assessment, student=self.student
+        ).exists())
+
+        started = self.client.get(
+            reverse("student_test", args=[assessment.pk]) + f"?attempt_id={other_attempt.pk}"
+        )
+        self.assertEqual(started.status_code, 200)
+        own_attempt = AssessmentAttempt.objects.get(assessment=assessment, student=self.student)
+        self.assertNotEqual(own_attempt.pk, other_attempt.pk)
+        self.assertNotContains(started, "private answer")
+
+    def test_teacher_attempt_views_reject_non_owner(self):
+        assessment = self.make_assessment()
+        question = self.add_question(assessment)
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=self.student,
+            started_at=timezone.now(),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        other_teacher_user = User.objects.create_user(
+            username="assessment-outsider-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        TeacherProfile.objects.create(user=other_teacher_user, employee_id="T-OUTSIDER")
+        self.client.force_login(other_teacher_user)
+
+        attempts_response = self.client.get(reverse("teacher_attempts", args=[assessment.pk]))
+        detail_response = self.client.get(reverse(
+            "teacher_attempt_detail", args=[assessment.pk, attempt.pk]
+        ))
+        preview_response = self.client.get(reverse("test_preview", args=[assessment.pk]))
+
+        self.assertEqual(attempts_response.status_code, 302)
+        self.assertEqual(detail_response.status_code, 302)
+        self.assertEqual(preview_response.status_code, 302)

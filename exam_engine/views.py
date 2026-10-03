@@ -1,3 +1,5 @@
+import hmac
+import random
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -18,6 +20,7 @@ from .models import (
     AssessmentAttempt,
     StudentAnswer,
 )
+from .forms import AssessmentConfigurationForm
 
 
 def _availability_error(assessment, now=None):
@@ -51,12 +54,36 @@ def test_management(request):
 
     teacher = request.user.teacher_profile
 
+    invalid_form = None
+    invalid_assessment_id = None
+    if request.method == "POST" and request.POST.get("action") == "update_configuration":
+        assessment = Assessment.objects.filter(
+            pk=request.POST.get("assessment_id"), teacher=teacher
+        ).first()
+        if assessment is None:
+            messages.error(request, "Assessment not found or you do not have permission to edit it.")
+            return redirect("test_management")
+        form = AssessmentConfigurationForm(request.POST, instance=assessment)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Assessment configuration updated.")
+            return redirect("test_management")
+        messages.error(request, "Please correct the assessment configuration fields.")
+        invalid_form = form
+        invalid_assessment_id = assessment.pk
+
     assessments = Assessment.objects.filter(
         teacher=teacher
     ).select_related(
         "student_class",
         "subject"
     ).order_by("-created_at")
+
+    for assessment in assessments:
+        assessment.configuration_form = (
+            invalid_form if assessment.pk == invalid_assessment_id
+            else AssessmentConfigurationForm(instance=assessment)
+        )
 
     return render(
         request,
@@ -247,6 +274,14 @@ def test_preview(request, assessment_id):
             assessment.is_published = False
             assessment.save(update_fields=["is_published"])
             messages.success(request, "Assessment is no longer available to students.")
+        elif request.POST.get("action") == "release_results":
+            assessment.results_released = True
+            assessment.save(update_fields=["results_released"])
+            messages.success(request, "Results have been released to students.")
+        elif request.POST.get("action") == "withhold_results":
+            assessment.results_released = False
+            assessment.save(update_fields=["results_released"])
+            messages.success(request, "Results are now withheld from students.")
         return redirect("test_preview", assessment_id=assessment.id)
 
     questions = assessment.questions.prefetch_related(
@@ -365,6 +400,18 @@ def student_assessment_instructions(request, assessment_id):
         return redirect("student_assessments")
 
     questions = assessment.questions.all()
+    attempts = AssessmentAttempt.objects.filter(
+        assessment=assessment, student=student
+    )
+    active_attempt = attempts.filter(
+        status=AssessmentAttempt.Status.IN_PROGRESS
+    ).first()
+    attempt_count = attempts.count()
+    limit_reached = (
+        assessment.max_attempts > 0
+        and attempt_count >= assessment.max_attempts
+        and active_attempt is None
+    )
 
     return render(
         request,
@@ -372,6 +419,10 @@ def student_assessment_instructions(request, assessment_id):
         {
             "assessment": assessment,
             "question_count": questions.count(),
+            "attempt_count": attempt_count,
+            "active_attempt": active_attempt,
+            "limit_reached": limit_reached,
+            "requires_access_code": bool(assessment.access_code and active_attempt is None),
         }
     )
 
@@ -415,7 +466,7 @@ def student_test(request, assessment_id):
             assessment=assessment,
             student=student,
             status=AssessmentAttempt.Status.IN_PROGRESS,
-        ).first()
+        ).order_by("-started_at", "-pk").first()
         if existing_attempt and assessment.due_date and timezone.now() > assessment.due_date:
             return redirect("student_submit", assessment_id=assessment.id)
         messages.error(request, availability_error)
@@ -442,27 +493,60 @@ def student_test(request, assessment_id):
         )
 
     # -------------------------------------------------
-    # Get or create student's attempt
+    # Resume an in-progress attempt or initialize a new one
     # -------------------------------------------------
 
-    started_at = timezone.now()
-    if assessment.timing_mode == Assessment.TimingMode.ENTIRE_TEST:
-        expires_at = started_at + timedelta(
-            hours=assessment.duration_hours,
-            minutes=assessment.duration_minutes
-        )
-    else:
-        expires_at = None
-
-    attempt, created = AssessmentAttempt.objects.get_or_create(
-        assessment=assessment,
-        student=student,
-        defaults={
-            "started_at": started_at,
-            "expires_at": expires_at,
-            "status": AssessmentAttempt.Status.IN_PROGRESS,
-        }
+    student_attempts = AssessmentAttempt.objects.filter(
+        assessment=assessment, student=student
     )
+    attempt = student_attempts.filter(
+        status=AssessmentAttempt.Status.IN_PROGRESS
+    ).order_by("-started_at", "-pk").first()
+    created_attempt = False
+    if attempt is None:
+        attempt_count = student_attempts.count()
+        if assessment.max_attempts > 0 and attempt_count >= assessment.max_attempts:
+            messages.error(request, "You have used all allowed attempts for this assessment.")
+            if attempt_count:
+                return redirect("student_result", assessment_id=assessment.id)
+            return redirect("student_assessment_instructions", assessment_id=assessment.id)
+
+        if assessment.access_code:
+            if request.method != "POST":
+                return render(request, "exam_engine/student_assessment_instructions.html", {
+                    "assessment": assessment,
+                    "question_count": len(questions),
+                    "attempt_count": attempt_count,
+                    "active_attempt": None,
+                    "limit_reached": False,
+                    "requires_access_code": True,
+                })
+            supplied_code = request.POST.get("access_code", "")
+            if not hmac.compare_digest(supplied_code, assessment.access_code):
+                messages.error(request, "The access code is incorrect.")
+                return redirect("student_assessment_instructions", assessment_id=assessment.id)
+
+        started_at = timezone.now()
+        expires_at = None
+        if assessment.timing_mode == Assessment.TimingMode.ENTIRE_TEST:
+            expires_at = started_at + timedelta(
+                hours=assessment.duration_hours,
+                minutes=assessment.duration_minutes
+            )
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=student,
+            started_at=started_at,
+            expires_at=expires_at,
+            status=AssessmentAttempt.Status.IN_PROGRESS,
+        )
+        created_attempt = True
+
+    if assessment.shuffle_questions:
+        random.Random(f"study-pod-attempt-{attempt.pk}").shuffle(questions)
+
+    if created_attempt and assessment.access_code:
+        return redirect("student_test", assessment_id=assessment.id)
 
     # -------------------------------------------------
     # Do not allow completed attempts to reopen
@@ -955,8 +1039,15 @@ def student_submit(request, assessment_id):
 
     attempt = AssessmentAttempt.objects.filter(
         assessment=assessment,
-        student=student
-    ).first()
+        student=student,
+        status=AssessmentAttempt.Status.IN_PROGRESS,
+    ).order_by("-started_at", "-pk").first()
+
+    if attempt is None:
+        attempt = AssessmentAttempt.objects.filter(
+            assessment=assessment,
+            student=student,
+        ).order_by("-started_at", "-pk").first()
 
     if not attempt:
         messages.error(
@@ -1332,10 +1423,17 @@ def student_result(request, assessment_id):
     attempt = AssessmentAttempt.objects.filter(
         assessment=assessment,
         student=student
-    ).first()
+    ).order_by("-started_at", "-pk").first()
 
     if not attempt:
         return redirect("student_assessments")
+
+    if not assessment.show_results_immediately and not assessment.results_released:
+        return render(request, "exam_engine/student_result.html", {
+            "assessment": assessment,
+            "attempt": attempt,
+            "results_pending": True,
+        })
 
     answers = attempt.answers.select_related(
         "question",
@@ -1354,6 +1452,7 @@ def student_result(request, assessment_id):
 
     score = attempt.score
     percentage = attempt.percentage
+    passed = percentage >= Decimal(str(assessment.passmark_percentage))
 
     correct_count = 0
     incorrect_count = 0
@@ -1413,6 +1512,7 @@ def student_result(request, assessment_id):
             "score": score,
             "total_marks": total_marks,
             "percentage": percentage,
+            "passed": passed,
             "correct_count": correct_count,
             "incorrect_count": incorrect_count,
             "unanswered_count": unanswered_count,

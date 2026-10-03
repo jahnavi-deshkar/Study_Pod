@@ -135,6 +135,11 @@
                 {{ calculated_total_marks }}
             </div>
 
+            <div class="col-md-4 mb-3"><strong>Attempts:</strong><br>{% if assessment.max_attempts == 0 %}Unlimited{% else %}{{ assessment.max_attempts }}{% endif %}</div>
+            <div class="col-md-4 mb-3"><strong>Passmark:</strong><br>{{ assessment.passmark_percentage|floatformat:1 }}%</div>
+            <div class="col-md-4 mb-3"><strong>Question order:</strong><br>{% if assessment.shuffle_questions %}Shuffled per attempt{% else %}Fixed{% endif %}</div>
+            <div class="col-md-4 mb-3"><strong>Results:</strong><br>{% if assessment.show_results_immediately %}Shown immediately{% elif assessment.results_released %}Released{% else %}Withheld{% endif %}</div>
+
         </div>
 
         <hr>
@@ -165,6 +170,12 @@
                 Each question may have its own time limit.
             </p>
 
+        {% endif %}
+
+        {% if assessment.instructions %}
+            <hr>
+            <h5 class="fw-bold">Pre-test Instructions</h5>
+            <div style="white-space: pre-wrap">{{ assessment.instructions }}</div>
         {% endif %}
 
     </div>
@@ -431,6 +442,17 @@
                 <button type="submit" name="action" value="publish" class="btn btn-success">Publish for Students</button>
             {% endif %}
         </form>
+
+        {% if not assessment.show_results_immediately %}
+            <form method="post" class="d-inline">
+                {% csrf_token %}
+                {% if assessment.results_released %}
+                    <button type="submit" name="action" value="withhold_results" class="btn btn-outline-warning">Withhold Results</button>
+                {% else %}
+                    <button type="submit" name="action" value="release_results" class="btn btn-success">Release Results</button>
+                {% endif %}
+            </form>
+        {% endif %}
 
     </div>
 

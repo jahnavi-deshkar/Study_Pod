@@ -314,3 +314,121 @@ class AssessmentFlowTests(TestCase):
         question = assessment.questions.get()
         self.assertEqual(question.options.count(), 2)
         self.assertEqual(question.options.filter(is_correct=True).count(), 1)
+
+    def test_attempt_limit_blocks_additional_starts_but_allows_unlimited(self):
+        limited = self.make_assessment(max_attempts=1)
+        self.add_question(limited)
+        AssessmentAttempt.objects.create(
+            assessment=limited,
+            student=self.student,
+            started_at=timezone.now() - timedelta(minutes=5),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        self.client.force_login(self.student_user)
+
+        response = self.client.get(reverse("student_test", args=[limited.pk]))
+        self.assertRedirects(response, reverse("student_result", args=[limited.pk]))
+        self.assertEqual(AssessmentAttempt.objects.filter(assessment=limited).count(), 1)
+
+        unlimited = self.make_assessment(title="Unlimited Test", max_attempts=0)
+        self.add_question(unlimited)
+        AssessmentAttempt.objects.create(
+            assessment=unlimited,
+            student=self.student,
+            started_at=timezone.now() - timedelta(minutes=5),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        response = self.client.get(reverse("student_test", args=[unlimited.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(AssessmentAttempt.objects.filter(assessment=unlimited).count(), 2)
+
+    def test_access_code_is_required_before_attempt_initialization(self):
+        assessment = self.make_assessment(access_code="SCIENCE42")
+        self.add_question(assessment)
+        self.client.force_login(self.student_user)
+
+        instructions = self.client.get(reverse("student_assessment_instructions", args=[assessment.pk]))
+        self.assertEqual(instructions.status_code, 200)
+        self.assertContains(instructions, "access_code")
+        self.assertFalse(AssessmentAttempt.objects.filter(assessment=assessment).exists())
+
+        wrong = self.client.post(reverse("student_test", args=[assessment.pk]), {
+            "access_code": "WRONG",
+        })
+        self.assertRedirects(wrong, reverse("student_assessment_instructions", args=[assessment.pk]))
+        self.assertFalse(AssessmentAttempt.objects.filter(assessment=assessment).exists())
+
+        correct = self.client.post(reverse("student_test", args=[assessment.pk]), {
+            "access_code": "SCIENCE42",
+        })
+        self.assertRedirects(correct, reverse("student_test", args=[assessment.pk]))
+        self.assertTrue(AssessmentAttempt.objects.filter(assessment=assessment, student=self.student).exists())
+
+    def test_shuffled_question_order_is_stable_for_each_attempt_and_keeps_options(self):
+        assessment = self.make_assessment(shuffle_questions=True)
+        questions = [self.add_question(assessment, question_text=f"Question {number}", order=number)
+                     for number in range(1, 9)]
+        self.client.force_login(self.student_user)
+
+        first = self.client.get(reverse("student_test", args=[assessment.pk]))
+        first_order = [item["question_id"] for item in first.context["question_navigation"]]
+        second = self.client.get(reverse("student_test", args=[assessment.pk]) + "?question=2")
+        second_order = [item["question_id"] for item in second.context["question_navigation"]]
+
+        self.assertEqual(set(first_order), {question.pk for question in questions})
+        self.assertEqual(first_order, second_order)
+        self.assertEqual(first.context["question"].options.count(), 2)
+
+    def test_results_can_be_withheld_and_released_by_assessment_teacher(self):
+        assessment = self.make_assessment(show_results_immediately=False)
+        question = self.add_question(assessment)
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=self.student,
+            started_at=timezone.now(),
+            submitted_at=timezone.now(),
+            status=AssessmentAttempt.Status.SUBMITTED,
+        )
+        StudentAnswer.objects.create(attempt=attempt, question=question, awarded_marks=2)
+        self.client.force_login(self.student_user)
+
+        hidden_result = self.client.get(reverse("student_result", args=[assessment.pk]))
+        self.assertContains(hidden_result, "Results pending")
+        self.assertNotContains(hidden_result, "Your Score")
+
+        self.client.force_login(self.teacher_user)
+        released = self.client.post(reverse("test_preview", args=[assessment.pk]), {
+            "action": "release_results",
+        })
+        self.assertRedirects(released, reverse("test_preview", args=[assessment.pk]))
+        assessment.refresh_from_db()
+        self.assertTrue(assessment.results_released)
+
+        self.client.force_login(self.student_user)
+        visible_result = self.client.get(reverse("student_result", args=[assessment.pk]))
+        self.assertContains(visible_result, "Your Score")
+
+    def test_teacher_can_update_advanced_assessment_configuration(self):
+        assessment = self.make_assessment()
+        self.client.force_login(self.teacher_user)
+
+        response = self.client.post(reverse("test_management"), {
+            "action": "update_configuration",
+            "assessment_id": assessment.pk,
+            "max_attempts": "3",
+            "shuffle_questions": "on",
+            "show_results_immediately": "on",
+            "passmark_percentage": "55.5",
+            "access_code": "CLASS-10",
+            "instructions": "Read every question carefully.",
+        })
+
+        self.assertRedirects(response, reverse("test_management"))
+        assessment.refresh_from_db()
+        self.assertEqual(assessment.max_attempts, 3)
+        self.assertTrue(assessment.shuffle_questions)
+        self.assertEqual(assessment.passmark_percentage, 55.5)
+        self.assertEqual(assessment.access_code, "CLASS-10")
+        self.assertEqual(assessment.instructions, "Read every question carefully.")

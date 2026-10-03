@@ -604,6 +604,31 @@ def create_assessment(request):
             "due_date"
         )
 
+        try:
+            max_attempts = int(request.POST.get("max_attempts", "1"))
+            if max_attempts < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            messages.error(request, "Maximum attempts must be zero (unlimited) or a positive whole number.")
+            return redirect("create_assessment")
+
+        try:
+            passmark_percentage = float(request.POST.get("passmark_percentage", "40"))
+            if not 0 <= passmark_percentage <= 100:
+                raise ValueError
+        except (TypeError, ValueError):
+            messages.error(request, "Passmark must be between 0 and 100 percent.")
+            return redirect("create_assessment")
+
+        access_code = (request.POST.get("access_code") or "").strip()
+        if len(access_code) > 20:
+            messages.error(request, "Access code must be 20 characters or fewer.")
+            return redirect("create_assessment")
+
+        if assessment_type not in dict(Assessment.AssessmentType.choices):
+            messages.error(request, "Please select a valid assessment type.")
+            return redirect("create_assessment")
+
         if not all([
             title,
             student_class_id,
@@ -664,6 +689,12 @@ def create_assessment(request):
 
             available_from=available_from or None,
             due_date=due_date or None,
+            max_attempts=max_attempts,
+            shuffle_questions=request.POST.get("shuffle_questions") == "on",
+            show_results_immediately=request.POST.get("show_results_immediately", "on") == "on",
+            passmark_percentage=passmark_percentage,
+            access_code=access_code or None,
+            instructions=(request.POST.get("instructions") or "").strip(),
         )
 
 

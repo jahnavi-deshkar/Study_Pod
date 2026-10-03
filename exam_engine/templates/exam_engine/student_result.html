@@ -23,6 +23,13 @@
     </div>
 
 
+    {% if results_pending %}
+        <div class="alert alert-info shadow-sm" role="status">
+            <h4 class="alert-heading">Results pending</h4>
+            <p class="mb-0">Your teacher has chosen to release results later. Your score and answer breakdown will appear here when results are released.</p>
+        </div>
+    {% else %}
+
     <!-- Score -->
 
     <div class="card shadow-sm mb-4">
@@ -39,6 +46,15 @@
 
             <div class="fs-5 text-muted mt-2">
                 {{ percentage|floatformat:1 }}%
+            </div>
+            <div class="mt-2">
+                {% if attempt.status == "NEEDS_EVALUATION" %}
+                    <span class="badge bg-warning text-dark">Final result pending teacher evaluation</span>
+                {% elif passed %}
+                    <span class="badge bg-success">Passed (passmark {{ assessment.passmark_percentage|floatformat:1 }}%)</span>
+                {% else %}
+                    <span class="badge bg-danger">Below passmark ({{ assessment.passmark_percentage|floatformat:1 }}%)</span>
+                {% endif %}
             </div>
 
         </div>
@@ -374,6 +390,8 @@
         </div>
 
     </div>
+
+    {% endif %}
 
 
     <!-- Navigation -->

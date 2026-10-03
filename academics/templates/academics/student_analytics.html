@@ -1,0 +1,60 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}My Analytics | StudyPod{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1 class="h3 mb-1">My Performance Analytics</h1>
+    <p class="text-muted mb-0">A personal overview of your submitted assessment results.</p>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Assessments Taken</div><div class="display-6">{{ taken_count }} <span class="fs-4 text-muted">/ {{ assigned_count }}</span></div><div class="small text-muted">submitted / published for your class</div></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Overall Average</div><div class="display-6">{{ average_percentage|floatformat:1 }}%</div><div class="small text-muted">weighted by available marks</div></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Highest Performing Subject</div><div class="h4 mt-2">{% if highest_subject %}{{ highest_subject.subject.name }}{% else %}—{% endif %}</div>{% if highest_subject %}<div class="small text-success">{{ highest_subject.percentage|floatformat:1 }}%</div>{% endif %}</div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Lowest Performing Subject</div><div class="h4 mt-2">{% if lowest_subject %}{{ lowest_subject.subject.name }}{% else %}—{% endif %}</div>{% if lowest_subject %}<div class="small text-muted">{{ lowest_subject.percentage|floatformat:1 }}%</div>{% endif %}</div></div></div>
+</div>
+
+<div class="row g-4">
+    <section class="col-lg-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Subject Breakdown</h2>
+                {% for row in subject_breakdown %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1"><span>{{ row.subject.name }}</span><span class="fw-semibold">{{ row.percentage|floatformat:1 }}%</span></div>
+                    <div class="progress" role="progressbar" aria-label="{{ row.subject.name }} average" aria-valuenow="{{ row.percentage|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar {% if row.percentage < 50 %}bg-warning{% endif %}" style="width: {{ row.percentage|floatformat:0 }}%"></div>
+                    </div>
+                    <div class="small text-muted">{{ row.obtained_marks|floatformat:2 }} / {{ row.total_marks }} marks · {{ row.assessments_taken }} assessment{{ row.assessments_taken|pluralize }}</div>
+                </div>
+                {% empty %}<p class="text-muted mb-0">Subject averages will appear after you submit an assessment.</p>{% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Assessment Performance History</h2>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Assessment</th><th>Subject</th><th>Submitted</th><th>Score</th><th>Percentage</th></tr></thead>
+                        <tbody>
+                            {% for row in history %}
+                            <tr>
+                                <td>{{ row.attempt.assessment.title }}</td>
+                                <td>{{ row.attempt.assessment.subject.name }}</td>
+                                <td>{{ row.attempt.submitted_at|date:"M j, Y" }}</td>
+                                <td>{{ row.score|floatformat:2 }} / {{ row.total_marks }}</td>
+                                <td><span class="badge {% if row.percentage < 50 %}text-bg-warning{% else %}text-bg-success{% endif %}">{{ row.percentage|floatformat:1 }}%</span></td>
+                            </tr>
+                            {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No submitted assessment results yet.</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

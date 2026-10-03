@@ -36,6 +36,12 @@
                 <a href="{% url 'doubt_threads' %}" class="text-white text-decoration-none ms-3">Discussions</a>
                 {% endif %}
 
+                {% if user.role == "STUDENT" %}
+                <a href="{% url 'student_analytics' %}" class="text-white text-decoration-none ms-3">My Analytics</a>
+                {% elif user.role == "TEACHER" %}
+                <a href="{% url 'teacher_analytics' %}" class="text-white text-decoration-none ms-3">Analytics</a>
+                {% endif %}
+
             {% endif %}
 
             {% if user.is_authenticated %}

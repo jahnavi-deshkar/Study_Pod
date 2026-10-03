@@ -40,6 +40,13 @@
                         {{ assessment.subject.name }}
                     </p>
 
+                    {% if assessment.instructions %}
+                        <div class="alert alert-info" style="white-space: pre-wrap">
+                            <h5>Instructions</h5>
+                            {{ assessment.instructions }}
+                        </div>
+                    {% endif %}
+
 
                     {% if assessment.description %}
 
@@ -79,6 +86,20 @@
 
                             </div>
 
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3">
+                                <small class="text-muted">Attempts Used</small>
+                                <div class="fs-5 fw-semibold">{{ attempt_count }}{% if assessment.max_attempts == 0 %} / Unlimited{% else %} / {{ assessment.max_attempts }}{% endif %}</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3">
+                                <small class="text-muted">Passmark</small>
+                                <div class="fs-5 fw-semibold">{{ assessment.passmark_percentage|floatformat:1 }}%</div>
+                            </div>
                         </div>
 
 
@@ -184,9 +205,7 @@
 
                         <ul class="mb-0">
 
-                            <li>
-                                Make sure you have enough time to complete the assessment.
-                            </li>
+                            <li>Make sure you have enough time to complete the assessment.</li>
 
                             <li>
                                 Read each question carefully before answering.
@@ -211,12 +230,19 @@
                         </a>
 
 
-                        <a
-                            href="{% url 'student_test' assessment.id %}"
-                            class="btn btn-primary"
-                        >
-                            Start Test
-                        </a>
+                        {% if limit_reached %}
+                            <button class="btn btn-secondary" type="button" disabled>Attempt limit reached</button>
+                        {% elif requires_access_code %}
+                            <form method="post" action="{% url 'student_test' assessment.id %}" class="d-flex gap-2">
+                                {% csrf_token %}
+                                <input type="password" name="access_code" class="form-control" maxlength="20" placeholder="Access code" aria-label="Access code" required>
+                                <button type="submit" class="btn btn-primary text-nowrap">Verify &amp; Start</button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'student_test' assessment.id %}" class="btn btn-primary">
+                                {% if active_attempt %}Resume Test{% else %}Start Test{% endif %}
+                            </a>
+                        {% endif %}
 
                     </div>
 

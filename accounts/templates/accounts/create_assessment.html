@@ -504,6 +504,43 @@
 
                 <!-- Available from -->
 
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label" for="maxAttempts">Maximum Attempts</label>
+                        <input id="maxAttempts" type="number" name="max_attempts" class="form-control" min="0" value="1" required>
+                        <div class="form-text">Use 0 to allow unlimited attempts.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="passmarkPercentage">Passmark (%)</label>
+                        <input id="passmarkPercentage" type="number" name="passmark_percentage" class="form-control" min="0" max="100" step="0.1" value="40" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="accessCode">Access Code (optional)</label>
+                        <input id="accessCode" type="password" name="access_code" class="form-control" maxlength="20" autocomplete="new-password">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="assessmentInstructions">Pre-test Instructions</label>
+                        <textarea id="assessmentInstructions" name="instructions" class="form-control" rows="3" placeholder="Instructions students should read before starting"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="shuffle_questions" id="shuffleQuestions">
+                            <label class="form-check-label" for="shuffleQuestions">Shuffle question order for each attempt</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input type="hidden" name="show_results_immediately" value="off">
+                            <input class="form-check-input" type="checkbox" name="show_results_immediately" id="showResultsImmediately" checked>
+                            <label class="form-check-label" for="showResultsImmediately">Show results immediately after submission</label>
+                        </div>
+                        <div class="form-text">If unchecked, results stay hidden until you release them from Preview / Publish.</div>
+                    </div>
+                </div>
+
+
+                <!-- Available from -->
+
                 <div class="mb-4">
 
                     <label class="form-label">

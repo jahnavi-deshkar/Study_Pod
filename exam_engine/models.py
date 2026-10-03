@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import models
+from django.db.models import Q
 from django.db.models import Sum
 
 
@@ -175,10 +176,12 @@ class AssessmentAttempt(models.Model):
     )
 
     class Meta:
+        ordering = ["-started_at", "-pk"]
         constraints = [
             models.UniqueConstraint(
                 fields=["assessment", "student"],
-                name="unique_student_assessment_attempt"
+                condition=Q(status="IN_PROGRESS"),
+                name="unique_active_student_assessment_attempt",
             )
         ]
 

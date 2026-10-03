@@ -202,6 +202,14 @@ class Assessment(models.Model):
 
     is_published = models.BooleanField(default=False)
 
+    max_attempts = models.PositiveIntegerField(default=1)
+    shuffle_questions = models.BooleanField(default=False)
+    show_results_immediately = models.BooleanField(default=True)
+    results_released = models.BooleanField(default=False)
+    passmark_percentage = models.FloatField(default=40.0)
+    access_code = models.CharField(max_length=20, blank=True, null=True)
+    instructions = models.TextField(blank=True)
+
     # Test timing configuration
 
     timing_mode = models.CharField(

@@ -125,11 +125,17 @@
 
                                             <td>
 
-                                                {% if record.is_present %}
+                                        {% if record.status == "PRESENT" %}
 
                                                     <span class="badge bg-success">
                                                         Present
                                                     </span>
+
+                                        {% elif record.status == "LATE" %}
+
+                                            <span class="badge bg-warning text-dark">
+                                                Late
+                                            </span>
 
                                                 {% else %}
 

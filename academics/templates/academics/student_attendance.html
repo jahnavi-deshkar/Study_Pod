@@ -1,0 +1,64 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}My Attendance{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-4">
+        <h2>My Attendance</h2>
+        <p class="text-muted mb-0">Your attendance records and overall attendance rate.</p>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100"><div class="card-body text-center">
+                <div class="text-muted">Total Classes Held</div><div class="display-6 fw-bold">{{ total_classes }}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100"><div class="card-body text-center">
+                <div class="text-muted">Present</div><div class="display-6 fw-bold text-success">{{ present_days }}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100"><div class="card-body text-center">
+                <div class="text-muted">Absent / Late</div><div class="display-6 fw-bold text-warning">{{ absent_or_late_days }}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100"><div class="card-body text-center">
+                <div class="text-muted">Attendance Percentage</div><div class="display-6 fw-bold">{{ attendance_percentage|floatformat:1 }}%</div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h4 class="mb-3">Recent Attendance</h4>
+            {% if records %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light"><tr><th>Date</th><th>Class</th><th>Status</th><th>Teacher Notes</th></tr></thead>
+                    <tbody>
+                        {% for record in records|slice:":30" %}
+                        <tr>
+                            <td>{{ record.date|date:"d M Y" }}</td>
+                            <td>{{ record.student_class|default:"—" }}</td>
+                            <td>
+                                {% if record.status == "PRESENT" %}<span class="badge bg-success">Present</span>
+                                {% elif record.status == "LATE" %}<span class="badge bg-warning text-dark">Late</span>
+                                {% else %}<span class="badge bg-danger">Absent</span>{% endif %}
+                            </td>
+                            <td>{% if record.remarks %}{{ record.remarks }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">No attendance records are available yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -77,13 +77,36 @@ class Notice(models.Model):
 
 
 class Attendance(models.Model):
+    class Status(models.TextChoices):
+        PRESENT = "PRESENT", "Present"
+        ABSENT = "ABSENT", "Absent"
+        LATE = "LATE", "Late"
+
     student = models.ForeignKey(
         "accounts.StudentProfile",
         on_delete=models.CASCADE,
         related_name="attendance_records"
     )
 
+    student_class = models.ForeignKey(
+        Class,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_records",
+    )
+
     date = models.DateField()
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.ABSENT,
+    )
+
+    remarks = models.TextField(blank=True)
+
+    # Kept for compatibility with existing reports and integrations.
     is_present = models.BooleanField(default=False)
 
     marked_by = models.ForeignKey(
@@ -101,8 +124,11 @@ class Attendance(models.Model):
         )
 
     def __str__(self):
-        status = "Present" if self.is_present else "Absent"
-        return f"{self.student} - {self.date} - {status}"
+        return f"{self.student} - {self.date} - {self.get_status_display()}"
+
+    def save(self, *args, **kwargs):
+        self.is_present = self.status == self.Status.PRESENT
+        super().save(*args, **kwargs)
 
 
 class Resource(models.Model):

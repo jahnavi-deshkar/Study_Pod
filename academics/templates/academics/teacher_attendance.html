@@ -1,0 +1,85 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Teacher Attendance{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-4">
+        <h2>Record Attendance</h2>
+        <p class="text-muted mb-0">Choose an assigned class and date to review or record the roster.</p>
+    </div>
+
+    {% if attendance_errors %}
+    <div class="alert alert-danger" role="alert">
+        {% for error in attendance_errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="card shadow-sm">
+        {% csrf_token %}
+        <div class="card-body">
+            {% if selection_form.non_field_errors %}<div class="alert alert-danger">{{ selection_form.non_field_errors }}</div>{% endif %}
+            <div class="row align-items-end g-3">
+                <div class="col-md-5">
+                    <label class="form-label" for="id_student_class">Class</label>
+                    {{ selection_form.student_class }}
+                    {% for error in selection_form.student_class.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="id_date">Date</label>
+                    {{ selection_form.date }}
+                    {% for error in selection_form.date.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" name="action" value="load" class="btn btn-outline-primary w-100">Load Roster</button>
+                </div>
+            </div>
+
+            {% if selection_form.fields.student_class.queryset|length == 0 %}
+                <div class="alert alert-info mt-3 mb-0">You do not have any class assignments yet.</div>
+            {% endif %}
+        </div>
+
+        {% if selected_class %}
+        <div class="card-body border-top">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <h4 class="mb-0">{{ selected_class }} · {{ selected_date|date:"d M Y" }}</h4>
+                <span class="text-muted">{{ students|length }} student{{ students|length|pluralize }}</span>
+            </div>
+
+            {% if students %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr><th>Student</th><th>Roll No.</th><th>Status</th><th>Teacher Notes</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr>
+                            <td>{{ student.user.get_full_name|default:student.user.username }}</td>
+                            <td>{{ student.roll_number }}</td>
+                            <td>
+                                {% for value,label in status_choices %}
+                                <label class="form-check form-check-inline mb-1">
+                                    <input class="form-check-input" type="radio" name="status_{{ student.id }}" value="{{ value }}" {% if student.attendance_status == value %}checked{% endif %}>
+                                    <span class="form-check-label">{{ label }}</span>
+                                </label>
+                                {% endfor %}
+                            </td>
+                            <td><input type="text" name="remarks_{{ student.id }}" class="form-control" value="{{ student.attendance_remarks }}" maxlength="500" placeholder="Optional note"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-end">
+                <button type="submit" name="action" value="save" class="btn btn-primary">Save Attendance</button>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">No students are enrolled in this class yet.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

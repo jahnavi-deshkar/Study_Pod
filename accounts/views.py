@@ -226,146 +226,16 @@ def create_notice(request):
 
 @login_required
 def attendance(request):
-    if request.user.role != "TEACHER":
-        return redirect("dashboard")
+    from academics.views import teacher_attendance
 
-    teacher = request.user.teacher_profile
-
-    assigned_classes = Class.objects.filter(
-        teaching_assignments__teacher=teacher
-    ).distinct()
-
-    selected_class = None
-    students = []
-    selected_date = ""
-
-    if request.method == "POST":
-
-        action = request.POST.get("action")
-        student_class_id = request.POST.get(
-            "student_class"
-        )
-        selected_date = request.POST.get(
-            "date"
-        )
-
-        if not student_class_id or not selected_date:
-
-            messages.error(
-                request,
-                "Please select a class and date."
-            )
-
-            return redirect("attendance")
-
-        selected_class = Class.objects.filter(
-            id=student_class_id
-        ).first()
-
-        if selected_class is None or not TeachingAssignment.objects.filter(
-            teacher=teacher,
-            student_class=selected_class
-        ).exists():
-            return HttpResponseForbidden(
-                "You are not assigned to this class."
-            )
-
-        students = list(
-            selected_class.students.all()
-        )
-
-        existing_records = Attendance.objects.filter(
-            student__in=students,
-            date=selected_date
-        )
-
-        attendance_status = {
-            record.student_id: record.is_present
-            for record in existing_records
-        }
-
-        for student in students:
-
-            if student.id in attendance_status:
-
-                if attendance_status[student.id]:
-                    student.attendance_status = "present"
-                else:
-                    student.attendance_status = "absent"
-
-            else:
-                student.attendance_status = ""
-
-        if action == "save":
-
-            for student in students:
-
-                status = request.POST.get(
-                    f"student_{student.id}"
-                )
-
-                Attendance.objects.update_or_create(
-                    student=student,
-                    date=selected_date,
-                    defaults={
-                        "is_present": status == "present",
-                        "marked_by": teacher,
-                    }
-                )
-
-            messages.success(
-                request,
-                "Attendance saved successfully."
-            )
-
-            return redirect("attendance")
-
-    return render(
-        request,
-        "accounts/attendance.html",
-        {
-            "classes": assigned_classes,
-            "students": students,
-            "selected_class": selected_class,
-            "selected_date": selected_date,
-        }
-    )
+    return teacher_attendance(request)
 
 
 @login_required
 def student_attendance(request):
-    if request.user.role != "STUDENT":
-        return redirect("dashboard")
+    from academics.views import student_attendance
 
-    student = request.user.student_profile
-
-    records = Attendance.objects.filter(
-        student=student
-    ).order_by("-date")
-
-    total_days = records.count()
-
-    present_days = records.filter(
-        is_present=True
-    ).count()
-
-    if total_days > 0:
-        attendance_percentage = (
-            present_days / total_days
-        ) * 100
-    else:
-        attendance_percentage = 0
-
-    return render(
-        request,
-        "accounts/student_attendance.html",
-        {
-            "records": records,
-            "total_days": total_days,
-            "present_days": present_days,
-            "attendance_percentage": attendance_percentage,
-        }
-    )
+    return student_attendance(request)
 
 
 @login_required

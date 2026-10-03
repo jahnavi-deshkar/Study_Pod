@@ -71,12 +71,35 @@
                                 {{ assessment.total_marks }}
                             </p>
 
+                            <p class="mb-3">
+                                <strong>Student access:</strong>
+                                {% if assessment.is_published %}
+                                    <span class="badge bg-success">Published</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Draft</span>
+                                {% endif %}
+                            </p>
+
 
                             <a
                                 href="{% url 'question_create' assessment.id %}"
                                 class="btn btn-outline-primary w-100"
                             >
                                 Add Questions
+                            </a>
+
+                            <a
+                                href="{% url 'test_preview' assessment.id %}"
+                                class="btn btn-outline-secondary w-100 mt-2"
+                            >
+                                Preview / Publish
+                            </a>
+
+                            <a
+                                href="{% url 'teacher_attempts' assessment.id %}"
+                                class="btn btn-outline-primary w-100 mt-2"
+                            >
+                                View Student Attempts
                             </a>
 
                         </div>

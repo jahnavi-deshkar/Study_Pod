@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
+from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect
 
 from .forms import (
@@ -257,9 +258,17 @@ def attendance(request):
 
             return redirect("attendance")
 
-        selected_class = Class.objects.get(
+        selected_class = Class.objects.filter(
             id=student_class_id
-        )
+        ).first()
+
+        if selected_class is None or not TeachingAssignment.objects.filter(
+            teacher=teacher,
+            student_class=selected_class
+        ).exists():
+            return HttpResponseForbidden(
+                "You are not assigned to this class."
+            )
 
         students = list(
             selected_class.students.all()

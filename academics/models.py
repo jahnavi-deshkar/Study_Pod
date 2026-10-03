@@ -234,3 +234,61 @@ class Assessment(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.get_assessment_type_display()}"
+
+
+class DoubtThread(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        RESOLVED = "RESOLVED", "Resolved"
+
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    student = models.ForeignKey(
+        "accounts.StudentProfile",
+        on_delete=models.CASCADE,
+        related_name="doubt_threads",
+    )
+    student_class = models.ForeignKey(
+        Class,
+        on_delete=models.CASCADE,
+        related_name="doubt_threads",
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        related_name="doubt_threads",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+
+    def __str__(self):
+        return self.title
+
+
+class DoubtReply(models.Model):
+    thread = models.ForeignKey(
+        DoubtThread,
+        on_delete=models.CASCADE,
+        related_name="replies",
+    )
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="doubt_replies",
+    )
+    content = models.TextField()
+    is_teacher_reply = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")
+
+    def __str__(self):
+        return f"Reply by {self.user} on {self.thread}"

@@ -1,0 +1,89 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Class Discussions | StudyPod{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Subject Doubts &amp; Discussions</h1>
+        <p class="text-muted mb-0">Ask questions and learn together with your class.</p>
+    </div>
+    {% if can_create_thread %}
+    <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#newQuestion">Ask a question</button>
+    {% endif %}
+</div>
+
+{% if can_create_thread %}
+<div class="collapse mb-4" id="newQuestion">
+    <div class="card card-body shadow-sm">
+        <h2 class="h5">Start a discussion</h2>
+        <form method="post" action="{% url 'doubt_threads' %}?student_class={{ selected_class.pk }}">
+            {% csrf_token %}
+            <input type="hidden" name="student_class" value="{{ selected_class.pk }}">
+            {% for field in thread_form %}
+            <div class="mb-3">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+            {% for error in thread_form.non_field_errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+            <button class="btn btn-success" type="submit">Post question</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<form method="get" class="card card-body mb-4">
+    <div class="row g-3 align-items-end">
+        {% if classes|length > 1 %}
+        <div class="col-md-3">
+            <label class="form-label" for="classFilter">Class</label>
+            <select class="form-select" id="classFilter" name="student_class">
+                {% for class in classes %}<option value="{{ class.pk }}" {% if class.pk == selected_class.pk %}selected{% endif %}>{{ class }}</option>{% endfor %}
+            </select>
+        </div>
+        {% else %}<input type="hidden" name="student_class" value="{{ selected_class.pk }}">{% endif %}
+        <div class="col-md-3">
+            <label class="form-label" for="subjectFilter">Subject</label>
+            <select class="form-select" id="subjectFilter" name="subject">
+                <option value="">All subjects</option>
+                {% for subject in subjects %}<option value="{{ subject.pk }}" {% if subject.pk|stringformat:"s" == selected_subject %}selected{% endif %}>{{ subject.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="statusFilter">Status</label>
+            <select class="form-select" id="statusFilter" name="status">
+                <option value="ALL" {% if status_filter == "ALL" %}selected{% endif %}>All</option>
+                <option value="OPEN" {% if status_filter == "OPEN" %}selected{% endif %}>Open</option>
+                <option value="RESOLVED" {% if status_filter == "RESOLVED" %}selected{% endif %}>Resolved</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="searchQuery">Search</label>
+            <input class="form-control" id="searchQuery" name="q" value="{{ search_query }}" placeholder="Title or keyword">
+        </div>
+        <div class="col-md-1"><button class="btn btn-outline-primary w-100" type="submit">Filter</button></div>
+    </div>
+</form>
+
+<div class="list-group shadow-sm">
+    {% for thread in threads %}
+    <a class="list-group-item list-group-item-action p-3" href="{% url 'doubt_thread_detail' thread.pk %}">
+        <div class="d-flex justify-content-between gap-3">
+            <div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <h2 class="h5 mb-0">{{ thread.title }}</h2>
+                    <span class="badge {% if thread.status == 'OPEN' %}text-bg-primary{% else %}text-bg-success{% endif %}">{{ thread.get_status_display }}</span>
+                </div>
+                <p class="text-muted mb-2">{{ thread.subject.name }} · Asked by {{ thread.student.user.get_full_name|default:thread.student.user.username }}</p>
+                <p class="mb-0">{{ thread.content|truncatewords:28 }}</p>
+            </div>
+            <small class="text-muted text-nowrap">{{ thread.created_at|date:"M j, Y · H:i" }}</small>
+        </div>
+    </a>
+    {% empty %}
+    <div class="list-group-item text-center text-muted py-5">No discussions match these filters yet.</div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -32,6 +32,10 @@
                 Notices
                 </a>
 
+                {% if user.role == "STUDENT" or user.role == "TEACHER" %}
+                <a href="{% url 'doubt_threads' %}" class="text-white text-decoration-none ms-3">Discussions</a>
+                {% endif %}
+
             {% endif %}
 
             {% if user.is_authenticated %}

@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import StudentProfile, TeacherProfile, User
-from .models import Attendance, Class, Subject, TeachingAssignment
+from .models import Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
 
 
 class AttendanceWorkflowTests(TestCase):
@@ -155,3 +155,113 @@ class AttendanceWorkflowTests(TestCase):
         self.assertContains(response, "50.0%")
         self.assertContains(response, "Own private note")
         self.assertNotContains(response, "Other student's note")
+
+
+class DoubtForumTests(TestCase):
+    def setUp(self):
+        self.teacher_user = User.objects.create_user(
+            username="forum-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        self.teacher = TeacherProfile.objects.create(
+            user=self.teacher_user, employee_id="T-FORUM-1"
+        )
+        self.student_class = Class.objects.create(
+            name="9", section="A", academic_year="2026-27"
+        )
+        self.other_class = Class.objects.create(
+            name="9", section="B", academic_year="2026-27"
+        )
+        self.subject = Subject.objects.create(name="Maths", code="MATH-FORUM")
+        TeachingAssignment.objects.create(
+            teacher=self.teacher,
+            student_class=self.student_class,
+            subject=self.subject,
+        )
+        self.student = self.make_student("forum-student", "F-1", self.student_class)
+        self.classmate = self.make_student("forum-classmate", "F-2", self.student_class)
+        self.outsider = self.make_student("forum-outsider", "F-3", self.other_class)
+
+    def make_student(self, username, roll_number, student_class):
+        user = User.objects.create_user(
+            username=username, password="test-pass", role=User.Role.STUDENT
+        )
+        return StudentProfile.objects.create(
+            user=user, roll_number=roll_number, student_class=student_class
+        )
+
+    def make_thread(self, student=None, student_class=None):
+        return DoubtThread.objects.create(
+            title="How do fractions work?",
+            content="Please explain the common denominator.",
+            student=student or self.student,
+            student_class=student_class or self.student_class,
+            subject=self.subject,
+        )
+
+    def test_student_can_create_thread_for_class_subject(self):
+        self.client.force_login(self.student.user)
+        response = self.client.post(reverse("doubt_threads"), {
+            "student_class": self.student_class.pk,
+            "subject": self.subject.pk,
+            "title": "Help with fractions",
+            "content": "How do I find a common denominator?",
+        })
+        thread = DoubtThread.objects.get(title="Help with fractions")
+        self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertEqual(thread.student, self.student)
+        self.assertEqual(thread.student_class, self.student_class)
+
+    def test_student_cannot_create_thread_for_another_class(self):
+        self.client.force_login(self.student.user)
+        response = self.client.post(reverse("doubt_threads"), {
+            "student_class": self.other_class.pk,
+            "subject": self.subject.pk,
+            "title": "Out of class",
+            "content": "This should not be saved.",
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(DoubtThread.objects.exists())
+
+    def test_classmate_and_assigned_teacher_can_reply(self):
+        thread = self.make_thread()
+        self.client.force_login(self.classmate.user)
+        response = self.client.post(reverse("doubt_thread_detail", args=[thread.pk]), {
+            "action": "reply", "content": "Try converting to eighths."
+        })
+        self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertFalse(DoubtReply.objects.get().is_teacher_reply)
+
+        self.client.force_login(self.teacher_user)
+        response = self.client.post(reverse("doubt_thread_detail", args=[thread.pk]), {
+            "action": "reply", "content": "Here is a worked example."
+        })
+        self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertTrue(DoubtReply.objects.get(user=self.teacher_user).is_teacher_reply)
+
+    def test_other_class_cannot_view_thread(self):
+        thread = self.make_thread()
+        self.client.force_login(self.outsider.user)
+        response = self.client.get(reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_teacher_must_be_assigned_to_thread_subject(self):
+        thread = self.make_thread()
+        another_teacher_user = User.objects.create_user(
+            username="forum-other-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        TeacherProfile.objects.create(
+            user=another_teacher_user, employee_id="T-FORUM-2"
+        )
+        self.client.force_login(another_teacher_user)
+        response = self.client.get(reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_author_can_toggle_resolved_status(self):
+        thread = self.make_thread()
+        self.client.force_login(self.student.user)
+        response = self.client.post(reverse("doubt_thread_detail", args=[thread.pk]), {
+            "action": "resolve"
+        })
+        self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
+        thread.refresh_from_db()
+        self.assertEqual(thread.status, DoubtThread.Status.RESOLVED)

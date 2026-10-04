@@ -37,9 +37,9 @@ python manage.py createsuperuser
 
 | Role | Username | Password |
 | --- | --- | --- |
-| Teacher | `teacher1` | `password123` |
-| Student | `student1` | `password123` |
-| Student | `student2` | `password123` |
+| Teacher | `Teacher1` | `Teacher@12345` |
+| Student | `Student1` | `Student@12345` |
+| Parent  | `Parent1` | `Parent@12345` |
 
 These predictable credentials are for local development only. Do not expose them or reuse them in a deployed environment. The sample assessment is a draft and has no questions until a teacher adds them.
 

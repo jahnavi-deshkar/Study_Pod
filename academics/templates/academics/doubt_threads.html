@@ -6,7 +6,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
         <h1 class="h3 mb-1">Subject Doubts &amp; Discussions</h1>
-        <p class="text-muted mb-0">Ask questions and learn together with your class.</p>
+        <p class="text-muted mb-0">{% if is_parent_view %}Read discussions for your child's class.{% else %}Ask questions and learn together with your class.{% endif %}</p>
     </div>
     {% if can_create_thread %}
     <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#newQuestion">Ask a question</button>

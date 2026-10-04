@@ -46,7 +46,9 @@
     {% endfor %}
 </div>
 
-{% if can_reply %}
+{% if is_parent_view %}
+<div class="alert alert-light border">You have read-only access to this discussion.</div>
+{% elif can_reply %}
 <div class="card card-body shadow-sm">
     <h2 class="h5">Add a reply</h2>
     <form method="post">

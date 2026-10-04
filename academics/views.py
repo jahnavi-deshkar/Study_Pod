@@ -64,6 +64,30 @@ def student_timetable(request):
     })
 
 
+@login_required
+def parent_timetable(request):
+    if request.user.role != "PARENT":
+        return HttpResponseForbidden("Parent timetable access is restricted to linked students.")
+    children = request.user.parent_profile.students.select_related("student_class").order_by(
+        "user__last_name", "user__first_name", "pk"
+    )
+    child_id = request.GET.get("student_id")
+    child = children.filter(pk=child_id).first() if child_id else children.first()
+    if child_id and child is None:
+        return HttpResponseForbidden("You can only view a linked student's timetable.")
+    entries = list(
+        Timetable.objects.filter(student_class=child.student_class)
+        .select_related("student_class", "subject", "teacher__user")
+    ) if child and child.student_class_id else []
+    return render(request, "academics/student_timetable.html", {
+        "days": _timetable_days(entries),
+        "student_class": child.student_class if child else None,
+        "selected_child": child,
+        "children": children,
+        "is_parent_view": True,
+    })
+
+
 def _attendance_context(selection_form, selected_class=None, selected_date=None,
                         students=None, attendance_errors=None):
     return {
@@ -227,19 +251,23 @@ def student_attendance(request):
 
 
 def _forum_scope(user):
-    """Return classes visible to this user and whether they are a student."""
+    """Return classes visible to this user, and the user's forum role flags."""
     if user.role == "STUDENT":
         profile = getattr(user, "student_profile", None)
         if profile and profile.student_class_id:
-            return Class.objects.filter(pk=profile.student_class_id), True
-        return Class.objects.none(), True
+            return Class.objects.filter(pk=profile.student_class_id), True, False
+        return Class.objects.none(), True, False
     if user.role == "TEACHER":
         profile = getattr(user, "teacher_profile", None)
         if profile:
             return Class.objects.filter(
                 teaching_assignments__teacher=profile
-            ).distinct(), False
-    return Class.objects.none(), False
+            ).distinct(), False, False
+    if user.role == "PARENT":
+        profile = getattr(user, "parent_profile", None)
+        if profile:
+            return Class.objects.filter(students__parent=profile).distinct(), False, True
+    return Class.objects.none(), False, False
 
 
 def _teacher_can_access_thread(user, thread):
@@ -253,7 +281,7 @@ def _teacher_can_access_thread(user, thread):
 
 @login_required
 def doubt_threads(request):
-    classes, is_student = _forum_scope(request.user)
+    classes, is_student, is_parent = _forum_scope(request.user)
     if not classes.exists():
         return HttpResponseForbidden("You do not have access to a class discussion forum.")
 
@@ -267,6 +295,8 @@ def doubt_threads(request):
         student_class=selected_class,
     )
     if request.method == "POST":
+        if is_parent:
+            return HttpResponseForbidden("Parents have read-only access to discussions.")
         if not is_student:
             return HttpResponseForbidden("Only students can start a doubt thread.")
         if selected_class and thread_form.is_valid():
@@ -283,7 +313,7 @@ def doubt_threads(request):
     allowed_subjects = Subject.objects.filter(
         teaching_assignments__student_class=selected_class
     )
-    if not is_student:
+    if request.user.role == "TEACHER":
         allowed_subjects = allowed_subjects.filter(
             teaching_assignments__teacher=request.user.teacher_profile
         )
@@ -314,24 +344,27 @@ def doubt_threads(request):
         "threads": threads,
         "thread_form": thread_form,
         "can_create_thread": is_student,
+        "is_parent_view": is_parent,
     })
 
 
 @login_required
 def doubt_thread_detail(request, pk):
-    classes, is_student = _forum_scope(request.user)
+    classes, is_student, is_parent = _forum_scope(request.user)
     thread = get_object_or_404(
         DoubtThread.objects.select_related("student__user", "student_class", "subject"),
         pk=pk,
     )
     if not classes.filter(pk=thread.student_class_id).exists():
         return HttpResponseForbidden("You cannot access this class discussion.")
-    assigned_teacher = not is_student and _teacher_can_access_thread(request.user, thread)
-    if not is_student and not assigned_teacher:
+    assigned_teacher = request.user.role == "TEACHER" and _teacher_can_access_thread(request.user, thread)
+    if request.user.role == "TEACHER" and not assigned_teacher:
         return HttpResponseForbidden("You are not assigned to this subject.")
     is_author = is_student and thread.student.user_id == request.user.pk
     reply_form = DoubtReplyForm(request.POST if request.method == "POST" else None)
     if request.method == "POST":
+        if is_parent:
+            return HttpResponseForbidden("Parents have read-only access to discussions.")
         action = request.POST.get("action", "reply")
         if action == "resolve":
             if not (is_author or assigned_teacher):
@@ -362,17 +395,32 @@ def doubt_thread_detail(request, pk):
         "replies": thread.replies.select_related("user"),
         "reply_form": reply_form,
         "can_resolve": is_author or assigned_teacher,
-        "can_reply": thread.status == DoubtThread.Status.OPEN,
+        "can_reply": not is_parent and thread.status == DoubtThread.Status.OPEN,
         "is_teacher": assigned_teacher,
+        "is_parent_view": is_parent,
     })
 
 
 @login_required
 def student_analytics(request):
-    if request.user.role != "STUDENT":
+    is_parent = request.user.role == "PARENT"
+    children = None
+    selected_child = None
+    if is_parent:
+        children = request.user.parent_profile.students.select_related("student_class").order_by(
+            "user__last_name", "user__first_name", "pk"
+        )
+        child_id = request.GET.get("student_id")
+        selected_child = children.filter(pk=child_id).first() if child_id else children.first()
+        if child_id and selected_child is None:
+            return HttpResponseForbidden("You can only view a linked student's progress.")
+        if selected_child is None:
+            return HttpResponseForbidden("No student is linked to this parent account.")
+        student = selected_child
+    elif request.user.role == "STUDENT":
+        student = request.user.student_profile
+    else:
         return HttpResponseForbidden("Student analytics are available only to the signed-in student.")
-
-    student = request.user.student_profile
     submitted_attempts = AssessmentAttempt.objects.filter(
         student=student,
         submitted_at__isnull=False,
@@ -448,6 +496,9 @@ def student_analytics(request):
         "highest_subject": highest_subject,
         "lowest_subject": lowest_subject,
         "history": history,
+        "children": children,
+        "selected_child": selected_child,
+        "is_parent_view": is_parent,
     })
 
 

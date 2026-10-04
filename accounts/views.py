@@ -292,7 +292,7 @@ def parent_attendance(request):
 @login_required
 def resource_upload(request):
     if request.user.role != "TEACHER":
-        return redirect("dashboard")
+        return HttpResponseForbidden("Only teachers can upload study resources.")
 
     teacher = request.user.teacher_profile
 
@@ -449,6 +449,14 @@ def resource_list(request):
 
         else:
             resources = Resource.objects.none()
+
+    elif user.role == "PARENT":
+        children = user.parent_profile.students.filter(
+            student_class__isnull=False
+        ).values_list("student_class_id", flat=True)
+        resources = Resource.objects.filter(
+            student_class_id__in=children
+        ).select_related("teacher", "student_class", "subject").order_by("-created_at")
 
     else:
         resources = Resource.objects.none()

@@ -4,9 +4,12 @@
 
 {% block content %}
 <div class="mb-4">
-    <h1 class="h3 mb-1">My Performance Analytics</h1>
-    <p class="text-muted mb-0">A personal overview of your submitted assessment results.</p>
+    <h1 class="h3 mb-1">{% if is_parent_view %}Student Progress{% else %}My Performance Analytics{% endif %}</h1>
+    <p class="text-muted mb-0">{% if is_parent_view %}Assessment results for {{ selected_child.user.get_full_name|default:selected_child.user.username }}.{% else %}A personal overview of your submitted assessment results.{% endif %}</p>
 </div>
+{% if is_parent_view and children|length > 1 %}
+<form method="get" class="card card-body mb-4"><label for="studentChoice" class="form-label">Student</label><div class="d-flex gap-2"><select class="form-select" id="studentChoice" name="student_id">{% for child in children %}<option value="{{ child.pk }}" {% if selected_child.pk == child.pk %}selected{% endif %}>{{ child.user.get_full_name|default:child.user.username }}</option>{% endfor %}</select><button class="btn btn-outline-primary" type="submit">View</button></div></form>
+{% endif %}
 
 <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Assessments Taken</div><div class="display-6">{{ taken_count }} <span class="fs-4 text-muted">/ {{ assigned_count }}</span></div><div class="small text-muted">submitted / published for your class</div></div></div></div>

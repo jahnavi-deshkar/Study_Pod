@@ -6,10 +6,10 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from accounts.models import StudentProfile, TeacherProfile, User
+from accounts.models import ParentProfile, StudentProfile, TeacherProfile, User
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
-from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment, Timetable
+from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Resource, Subject, TeachingAssignment, Timetable
 
 
 class AttendanceWorkflowTests(TestCase):
@@ -447,6 +447,11 @@ class SeedDataCommandTests(TestCase):
         self.assertEqual(Subject.objects.filter(code__in=["SEED-MATH", "SEED-SCI"]).count(), 2)
         self.assertEqual(Assessment.objects.filter(title="Sample Mathematics Assessment").count(), 1)
         self.assertEqual(Timetable.objects.count(), 2)
+        self.assertTrue(User.objects.filter(username="parent1", role=User.Role.PARENT).exists())
+        self.assertEqual(
+            StudentProfile.objects.get(user__username="student1").parent.user.username,
+            "parent1",
+        )
 
 
 class TimetableAccessTests(TestCase):
@@ -511,3 +516,132 @@ class TimetableAccessTests(TestCase):
         self.client.force_login(self.student_user)
         response = self.client.get(reverse("teacher_timetable"))
         self.assertRedirects(response, reverse("dashboard"))
+
+
+class ParentReadOnlyAccessTests(TestCase):
+    def setUp(self):
+        self.parent_user = User.objects.create_user(
+            username="linked-parent", password="test-pass", role=User.Role.PARENT
+        )
+        self.parent = ParentProfile.objects.create(user=self.parent_user)
+        self.student_user = User.objects.create_user(
+            username="linked-child", password="test-pass", role=User.Role.STUDENT
+        )
+        self.student_class = Class.objects.create(
+            name="8", section="A", academic_year="2026-27"
+        )
+        self.student = StudentProfile.objects.create(
+            user=self.student_user,
+            roll_number="P-CHILD",
+            student_class=self.student_class,
+            parent=self.parent,
+        )
+        self.other_class = Class.objects.create(
+            name="8", section="B", academic_year="2026-27"
+        )
+        teacher_user = User.objects.create_user(
+            username="parent-view-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        self.teacher = TeacherProfile.objects.create(
+            user=teacher_user, employee_id="T-PARENT-VIEW"
+        )
+        self.subject = Subject.objects.create(name="Geography", code="GEO-PARENT-VIEW")
+        TeachingAssignment.objects.create(
+            teacher=self.teacher, student_class=self.student_class, subject=self.subject
+        )
+        self.entry = Timetable.objects.create(
+            student_class=self.student_class,
+            subject=self.subject,
+            teacher=self.teacher,
+            day_of_week=Timetable.DayOfWeek.THURSDAY,
+            start_time="11:00",
+            end_time="11:45",
+            room_number="305",
+        )
+        self.resource = Resource.objects.create(
+            title="Geography notes",
+            teacher=self.teacher,
+            student_class=self.student_class,
+            subject=self.subject,
+            file="resources/geography.pdf",
+        )
+        self.foreign_resource = Resource.objects.create(
+            title="Private class notes",
+            teacher=self.teacher,
+            student_class=self.other_class,
+            subject=self.subject,
+            file="resources/private.pdf",
+        )
+        self.thread = DoubtThread.objects.create(
+            title="Map scale question",
+            content="How do I calculate map scale?",
+            student=self.student,
+            student_class=self.student_class,
+            subject=self.subject,
+        )
+        self.client.force_login(self.parent_user)
+
+    def test_parent_can_read_linked_child_pages_and_only_scoped_content(self):
+        dashboard = self.client.get(reverse("dashboard"))
+        timetable = self.client.get(reverse("parent_timetable"))
+        analytics = self.client.get(reverse("parent_analytics"))
+        resources = self.client.get(reverse("resource_list"))
+        discussions = self.client.get(reverse("doubt_threads"))
+        detail = self.client.get(reverse("doubt_thread_detail", args=[self.thread.pk]))
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, "Student Progress")
+        self.assertContains(dashboard, "View Timetable")
+        self.assertContains(dashboard, "View Resources")
+        self.assertContains(dashboard, "View Discussions")
+        self.assertEqual(timetable.status_code, 200)
+        self.assertContains(timetable, "Geography")
+        self.assertEqual(analytics.status_code, 200)
+        self.assertContains(analytics, "Student Progress")
+        self.assertEqual(resources.status_code, 200)
+        self.assertContains(resources, "Geography notes")
+        self.assertNotContains(resources, "Private class notes")
+        self.assertEqual(discussions.status_code, 200)
+        self.assertContains(discussions, "Map scale question")
+        self.assertFalse(discussions.context["can_create_thread"])
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "read-only access")
+        self.assertNotContains(detail, 'name="action" value="reply"')
+
+    def test_parent_cannot_access_an_unlinked_students_data(self):
+        response = self.client.get(
+            reverse("parent_timetable"), {"student_id": self.student.pk + 1000}
+        )
+        foreign_thread = DoubtThread.objects.create(
+            title="Other class question",
+            content="Private",
+            student=self.student,
+            student_class=self.other_class,
+            subject=self.subject,
+        )
+        thread_response = self.client.get(
+            reverse("doubt_thread_detail", args=[foreign_thread.pk])
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(thread_response.status_code, 403)
+
+    def test_parent_posts_are_forbidden_and_do_not_change_data(self):
+        thread_response = self.client.post(reverse("doubt_threads"), {
+            "student_class": self.student_class.pk,
+            "subject": self.subject.pk,
+            "title": "Should not be created",
+            "content": "No write access",
+        })
+        reply_response = self.client.post(
+            reverse("doubt_thread_detail", args=[self.thread.pk]),
+            {"action": "reply", "content": "Should not be posted"},
+        )
+        upload_response = self.client.post(reverse("resource_upload"), {
+            "title": "Should not upload",
+        })
+        self.assertEqual(thread_response.status_code, 403)
+        self.assertEqual(reply_response.status_code, 403)
+        self.assertEqual(upload_response.status_code, 403)
+        self.assertEqual(DoubtThread.objects.count(), 1)
+        self.assertEqual(DoubtReply.objects.count(), 0)
+        self.assertEqual(Resource.objects.count(), 2)

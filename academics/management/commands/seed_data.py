@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from accounts.models import StudentProfile, TeacherProfile
+from accounts.models import ParentProfile, StudentProfile, TeacherProfile
 from academics.models import Assessment, Class, Subject, TeachingAssignment, Timetable
 
 
@@ -31,6 +31,7 @@ class Command(BaseCommand):
         teacher.department = "Science and Mathematics"
         teacher.save(update_fields=["department"])
 
+        demo_students = []
         for username, first_name, roll_number in (
             ("student1", "Student", "SEED-S-001"),
             ("student2", "Student", "SEED-S-002"),
@@ -42,6 +43,12 @@ class Command(BaseCommand):
             )
             profile.student_class = student_class
             profile.save(update_fields=["student_class"])
+            demo_students.append(profile)
+
+        parent_user = self._user(User, "parent1", "Parent", "One", User.Role.PARENT)
+        parent, _ = ParentProfile.objects.get_or_create(user=parent_user)
+        demo_students[0].parent = parent
+        demo_students[0].save(update_fields=["parent"])
 
         for subject in (math, science):
             TeachingAssignment.objects.get_or_create(
@@ -78,7 +85,7 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS(
-            "StudyPod demo data is ready: teacher1, student1, student2 (password: password123)."
+            "StudyPod demo data is ready: teacher1, student1, student2, parent1 (password: password123)."
         ))
         self.stdout.write(f"Class: {student_class}; subjects: {math.name}, {science.name}.")
         self.stdout.write(f"Sample assessment: {assessment.title} (draft).")

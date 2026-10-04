@@ -12,4 +12,6 @@ urlpatterns = [
     path("teacher/analytics/", views.teacher_analytics, name="teacher_analytics"),
     path("teacher/timetable/", views.teacher_timetable, name="teacher_timetable"),
     path("student/timetable/", views.student_timetable, name="student_timetable"),
+    path("parent/timetable/", views.parent_timetable, name="parent_timetable"),
+    path("parent/analytics/", views.student_analytics, name="parent_analytics"),
 ]

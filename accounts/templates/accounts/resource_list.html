@@ -9,7 +9,7 @@
         <div>
             <h2>Study Resources</h2>
 
-            {% if request.user.role == "STUDENT" %}
+            {% if request.user.role == "STUDENT" or request.user.role == "PARENT" %}
                 <p class="text-muted mb-0">
                     Learning materials available for your class.
                 </p>
@@ -139,7 +139,7 @@
 
                 <h5>No Resources Yet</h5>
 
-                {% if request.user.role == "STUDENT" %}
+                {% if request.user.role == "STUDENT" or request.user.role == "PARENT" %}
 
                     <p class="text-muted">
                         No study resources have been uploaded for your class yet.

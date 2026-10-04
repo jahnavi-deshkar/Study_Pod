@@ -14,7 +14,54 @@ from accounts.models import StudentProfile
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
 from .forms import AttendanceSelectionForm, DoubtReplyForm, DoubtThreadForm
-from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
+from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment, Timetable
+
+
+WEEKDAYS = tuple(Timetable.DayOfWeek.choices)
+
+
+def _timetable_days(entries):
+    by_day = {code: [] for code, _label in WEEKDAYS}
+    for entry in entries:
+        by_day[entry.day_of_week].append(entry)
+    return [
+        {"code": code, "label": label, "entries": by_day[code]}
+        for code, label in WEEKDAYS
+    ]
+
+
+@login_required
+def teacher_timetable(request):
+    if request.user.role != "TEACHER":
+        return redirect("dashboard")
+    teacher = request.user.teacher_profile
+    entries = list(
+        Timetable.objects.filter(teacher=teacher)
+        .filter(
+            student_class__teaching_assignments__teacher=teacher,
+            student_class__teaching_assignments__subject=models.F("subject"),
+        )
+        .select_related("student_class", "subject", "teacher__user")
+        .distinct()
+    )
+    return render(request, "academics/teacher_timetable.html", {
+        "days": _timetable_days(entries),
+    })
+
+
+@login_required
+def student_timetable(request):
+    if request.user.role != "STUDENT":
+        return redirect("dashboard")
+    student_class = request.user.student_profile.student_class
+    entries = list(
+        Timetable.objects.filter(student_class=student_class)
+        .select_related("student_class", "subject", "teacher__user")
+    ) if student_class else []
+    return render(request, "academics/student_timetable.html", {
+        "days": _timetable_days(entries),
+        "student_class": student_class,
+    })
 
 
 def _attendance_context(selection_form, selected_class=None, selected_date=None,

@@ -9,7 +9,7 @@ from django.utils import timezone
 from accounts.models import StudentProfile, TeacherProfile, User
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
-from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
+from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Subject, TeachingAssignment, Timetable
 
 
 class AttendanceWorkflowTests(TestCase):
@@ -446,3 +446,68 @@ class SeedDataCommandTests(TestCase):
         self.assertEqual(Class.objects.filter(name="10", section="A", academic_year="2026-27").count(), 1)
         self.assertEqual(Subject.objects.filter(code__in=["SEED-MATH", "SEED-SCI"]).count(), 2)
         self.assertEqual(Assessment.objects.filter(title="Sample Mathematics Assessment").count(), 1)
+        self.assertEqual(Timetable.objects.count(), 2)
+
+
+class TimetableAccessTests(TestCase):
+    def setUp(self):
+        self.teacher_user = User.objects.create_user(
+            username="schedule-teacher", password="test-pass", role=User.Role.TEACHER
+        )
+        self.teacher = TeacherProfile.objects.create(
+            user=self.teacher_user, employee_id="T-SCHEDULE"
+        )
+        self.student_class = Class.objects.create(
+            name="7", section="A", academic_year="2026-27"
+        )
+        self.other_class = Class.objects.create(
+            name="7", section="B", academic_year="2026-27"
+        )
+        self.subject = Subject.objects.create(name="History", code="HISTORY-SCHEDULE")
+        TeachingAssignment.objects.create(
+            teacher=self.teacher, student_class=self.student_class, subject=self.subject
+        )
+        self.own_entry = Timetable.objects.create(
+            student_class=self.student_class,
+            subject=self.subject,
+            teacher=self.teacher,
+            day_of_week=Timetable.DayOfWeek.MONDAY,
+            start_time="09:00",
+            end_time="09:45",
+            room_number="204",
+        )
+        self.other_entry = Timetable.objects.create(
+            student_class=self.other_class,
+            subject=self.subject,
+            teacher=self.teacher,
+            day_of_week=Timetable.DayOfWeek.TUESDAY,
+            start_time="10:00",
+            end_time="10:45",
+        )
+        self.student_user = User.objects.create_user(
+            username="schedule-student", password="test-pass", role=User.Role.STUDENT
+        )
+        StudentProfile.objects.create(
+            user=self.student_user, roll_number="S-SCHEDULE", student_class=self.student_class
+        )
+
+    def test_student_only_sees_timetable_for_own_class(self):
+        self.client.force_login(self.student_user)
+        response = self.client.get(reverse("student_timetable"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "History")
+        self.assertContains(response, "Room 204")
+        self.assertNotContains(response, str(self.other_class))
+
+    def test_teacher_sees_only_assigned_class_subject_slots(self):
+        self.client.force_login(self.teacher_user)
+        response = self.client.get(reverse("teacher_timetable"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "History")
+        self.assertContains(response, str(self.student_class))
+        self.assertNotContains(response, str(self.other_class))
+
+    def test_roles_cannot_open_the_other_role_timetable(self):
+        self.client.force_login(self.student_user)
+        response = self.client.get(reverse("teacher_timetable"))
+        self.assertRedirects(response, reverse("dashboard"))

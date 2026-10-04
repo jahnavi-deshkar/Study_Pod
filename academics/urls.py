@@ -10,4 +10,6 @@ urlpatterns = [
     path("discussions/<int:pk>/", views.doubt_thread_detail, name="doubt_thread_detail"),
     path("student/analytics/", views.student_analytics, name="student_analytics"),
     path("teacher/analytics/", views.teacher_analytics, name="teacher_analytics"),
+    path("teacher/timetable/", views.teacher_timetable, name="teacher_timetable"),
+    path("student/timetable/", views.student_timetable, name="student_timetable"),
 ]

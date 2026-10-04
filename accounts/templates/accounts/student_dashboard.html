@@ -214,13 +214,7 @@
 
                     <div class="mt-auto">
 
-                        <button
-                            type="button"
-                            class="btn btn-secondary"
-                            disabled
-                        >
-                            Coming Soon
-                        </button>
+                        <a href="{% url 'doubt_threads' %}" class="btn btn-primary">View Discussions</a>
 
                     </div>
 
@@ -228,6 +222,22 @@
 
             </div>
 
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+                <h5 class="card-title">Student Progress</h5>
+                <p class="card-text">Review your assessment results and subject progress.</p>
+                <div class="mt-auto"><a href="{% url 'student_analytics' %}" class="btn btn-primary">View Analytics</a></div>
+            </div></div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+                <h5 class="card-title">Timetable</h5>
+                <p class="card-text">View your weekly class schedule.</p>
+                <div class="mt-auto"><a href="{% url 'student_timetable' %}" class="btn btn-primary">View Timetable</a></div>
+            </div></div>
         </div>
 
 

@@ -1,0 +1,24 @@
+{% extends "accounts/base.html" %}
+{% block title %}Teaching Timetable | StudyPod{% endblock %}
+{% block content %}
+<div class="container mt-3">
+    <div class="mb-4"><h2>Teaching Timetable</h2><p class="text-muted">Your assigned weekly teaching schedule.</p></div>
+    <div class="row g-3">
+        {% for day in days %}
+        <div class="col-12 col-md-6 col-xl-4">
+            <section class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">{{ day.label }}</div>
+                <div class="card-body">
+                    {% for entry in day.entries %}
+                    <article class="border rounded p-3 mb-2">
+                        <div class="fw-semibold">{{ entry.start_time|time:"H:i" }}–{{ entry.end_time|time:"H:i" }} · {{ entry.subject.name }}</div>
+                        <div>Class {{ entry.student_class }}{% if entry.room_number %} · Room {{ entry.room_number }}{% endif %}</div>
+                    </article>
+                    {% empty %}<p class="text-muted mb-0">No classes scheduled.</p>{% endfor %}
+                </div>
+            </section>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

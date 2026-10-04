@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from accounts.models import StudentProfile, TeacherProfile
-from academics.models import Assessment, Class, Subject, TeachingAssignment
+from academics.models import Assessment, Class, Subject, TeachingAssignment, Timetable
 
 
 class Command(BaseCommand):
@@ -48,6 +48,19 @@ class Command(BaseCommand):
                 teacher=teacher,
                 student_class=student_class,
                 subject=subject,
+            )
+
+        for day, subject, start, end, room in (
+            (Timetable.DayOfWeek.MONDAY, math, "09:00", "09:50", "101"),
+            (Timetable.DayOfWeek.WEDNESDAY, science, "10:00", "10:50", "Lab 1"),
+        ):
+            Timetable.objects.get_or_create(
+                student_class=student_class,
+                subject=subject,
+                teacher=teacher,
+                day_of_week=day,
+                start_time=start,
+                defaults={"end_time": end, "room_number": room},
             )
 
         assessment, _ = Assessment.objects.get_or_create(

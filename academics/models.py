@@ -48,6 +48,44 @@ class TeachingAssignment(models.Model):
         return f"{self.teacher} - {self.subject} - {self.student_class}"
 
 
+class Timetable(models.Model):
+    class DayOfWeek(models.TextChoices):
+        MONDAY = "MONDAY", "Monday"
+        TUESDAY = "TUESDAY", "Tuesday"
+        WEDNESDAY = "WEDNESDAY", "Wednesday"
+        THURSDAY = "THURSDAY", "Thursday"
+        FRIDAY = "FRIDAY", "Friday"
+        SATURDAY = "SATURDAY", "Saturday"
+
+    student_class = models.ForeignKey(
+        Class, on_delete=models.CASCADE, related_name="timetable_entries"
+    )
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name="timetable_entries"
+    )
+    teacher = models.ForeignKey(
+        "accounts.TeacherProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="timetable_entries",
+    )
+    day_of_week = models.CharField(max_length=9, choices=DayOfWeek.choices)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    room_number = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        ordering = ("day_of_week", "start_time", "student_class__name")
+
+    def __str__(self):
+        return (
+            f"Class {self.student_class} | {self.subject.name} | "
+            f"{self.get_day_of_week_display()[:3]} "
+            f"{self.start_time:%H:%M} - {self.end_time:%H:%M}"
+        )
+
+
 class Notice(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()

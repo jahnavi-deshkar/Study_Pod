@@ -39,6 +39,10 @@ class StudentProfile(models.Model):
         related_name="student_profile"
     )
     roll_number = models.CharField(max_length=50, unique=True)
+    profile_picture = models.ImageField(
+        upload_to="student_profiles/",
+        blank=True,
+    )
     student_class = models.ForeignKey(
         "academics.Class",
         on_delete=models.SET_NULL,

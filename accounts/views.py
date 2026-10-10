@@ -107,6 +107,7 @@ def profile(request):
 
         profile_form = profile_form_class(
             request.POST,
+            request.FILES,
             instance=profile_object
         )
 

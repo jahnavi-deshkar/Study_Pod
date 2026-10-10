@@ -34,7 +34,10 @@ class TeacherProfileForm(forms.ModelForm):
 class StudentProfileForm(forms.ModelForm):
     class Meta:
         model = StudentProfile
-        fields = []
+        fields = ["profile_picture"]
+        widgets = {
+            "profile_picture": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+        }
 
 
 class ParentProfileForm(forms.ModelForm):

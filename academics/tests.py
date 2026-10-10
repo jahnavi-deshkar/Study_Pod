@@ -1,5 +1,6 @@
 from io import StringIO
 from datetime import date
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -9,7 +10,7 @@ from django.utils import timezone
 from accounts.models import ParentProfile, StudentProfile, TeacherProfile, User
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
-from .models import Assessment, Attendance, Class, DoubtReply, DoubtThread, Resource, Subject, TeachingAssignment, Timetable
+from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, Resource, Subject, TeachingAssignment, Timetable
 
 
 class AttendanceWorkflowTests(TestCase):
@@ -200,6 +201,7 @@ class DoubtForumTests(TestCase):
             student=student or self.student,
             student_class=student_class or self.student_class,
             subject=self.subject,
+            is_public=True,
         )
 
     def test_student_can_create_thread_for_class_subject(self):
@@ -209,11 +211,164 @@ class DoubtForumTests(TestCase):
             "subject": self.subject.pk,
             "title": "Help with fractions",
             "content": "How do I find a common denominator?",
+            "category": DoubtThread.Category.SYLLABUS_TOPIC,
         })
         thread = DoubtThread.objects.get(title="Help with fractions")
         self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
         self.assertEqual(thread.student, self.student)
         self.assertEqual(thread.student_class, self.student_class)
+        self.assertFalse(thread.is_public)
+
+    def test_private_doubt_is_visible_to_author_and_assigned_teacher_only(self):
+        self.client.force_login(self.student.user)
+        response = self.client.post(reverse("doubt_threads"), {
+            "student_class": self.student_class.pk,
+            "subject": self.subject.pk,
+            "title": "Private homework question",
+            "content": "I need help with question 4.",
+            "category": DoubtThread.Category.ASSIGNMENT_HOMEWORK,
+        })
+        thread = DoubtThread.objects.get(title="Private homework question")
+        self.assertRedirects(response, reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertFalse(thread.is_public)
+
+        self.client.force_login(self.classmate.user)
+        self.assertNotContains(self.client.get(reverse("doubt_threads")), thread.title)
+        self.assertEqual(self.client.get(reverse("doubt_thread_detail", args=[thread.pk])).status_code, 403)
+
+        self.client.force_login(self.student.user)
+        self.assertEqual(self.client.get(reverse("doubt_thread_detail", args=[thread.pk])).status_code, 200)
+        self.client.force_login(self.teacher_user)
+        self.assertContains(self.client.get(reverse("doubt_threads")), thread.title)
+        self.assertEqual(self.client.get(reverse("doubt_thread_detail", args=[thread.pk])).status_code, 200)
+
+    def test_public_doubt_is_visible_anonymously_to_classmates(self):
+        self.client.force_login(self.student.user)
+        self.client.post(reverse("doubt_threads"), {
+            "student_class": self.student_class.pk,
+            "subject": self.subject.pk,
+            "title": "Public topic question",
+            "content": "Can someone explain this topic?",
+            "category": DoubtThread.Category.SYLLABUS_TOPIC,
+            "privacy": "PUBLIC",
+            "document_link": "https://example.com/physics-notes",
+        })
+        thread = DoubtThread.objects.get(title="Public topic question")
+        self.assertTrue(thread.is_public)
+        self.assertEqual(thread.document_link, "https://example.com/physics-notes")
+
+        self.client.force_login(self.classmate.user)
+        feed = self.client.get(reverse("doubt_threads"))
+        detail = self.client.get(reverse("doubt_thread_detail", args=[thread.pk]))
+        self.assertContains(feed, thread.title)
+        self.assertContains(feed, "Anonymous")
+        self.assertNotContains(feed, self.student.user.username)
+        self.assertContains(detail, "Anonymous")
+        self.assertNotContains(detail, self.student.user.username)
+
+        self.client.force_login(self.teacher_user)
+        self.assertContains(self.client.get(reverse("doubt_thread_detail", args=[thread.pk])), self.student.user.username)
+
+    def test_private_doubt_attachment_is_protected_by_thread_visibility(self):
+        thread = self.make_thread()
+        thread.is_public = False
+        thread.save(update_fields=["is_public"])
+        attachment = DoubtAttachment.objects.create(
+            thread=thread,
+            file=SimpleUploadedFile("diagram.png", b"image-bytes", content_type="image/png"),
+        )
+        url = reverse("doubt_attachment_download", args=[attachment.pk])
+
+        self.client.force_login(self.classmate.user)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(self.student.user)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.client.force_login(self.teacher_user)
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_doubt_form_rejects_unsupported_attachment_types(self):
+        self.client.force_login(self.student.user)
+        response = self.client.post(
+            reverse("doubt_threads"),
+            {
+                "student_class": self.student_class.pk,
+                "subject": self.subject.pk,
+                "title": "Unsupported attachment",
+                "content": "This should be rejected.",
+                "category": DoubtThread.Category.STUDY_RESOURCE,
+                "privacy": "PRIVATE",
+                "attachments": SimpleUploadedFile("script.exe", b"not allowed"),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Attach only PNG, JPG, JPEG, or PDF files.")
+        self.assertFalse(DoubtThread.objects.filter(title="Unsupported attachment").exists())
+
+    def test_teacher_inbox_filters_assigned_doubts_and_shows_real_student_identity(self):
+        visible = self.make_thread()
+        visible.title = "Visible homework doubt"
+        visible.category = DoubtThread.Category.ASSIGNMENT_HOMEWORK
+        visible.is_public = True
+        visible.save()
+        hidden = self.make_thread(student=self.outsider, student_class=self.other_class)
+        hidden.title = "Unassigned class doubt"
+        hidden.save()
+
+        self.client.force_login(self.teacher_user)
+        response = self.client.get(reverse("doubt_threads"), {
+            "category": DoubtThread.Category.ASSIGNMENT_HOMEWORK,
+            "student_class": self.student_class.pk,
+            "student": self.student.pk,
+            "status": "ALL",
+            "date_range": "ALL",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, visible.title)
+        self.assertContains(response, self.student.user.username)
+        self.assertNotContains(response, hidden.title)
+
+    def test_assigned_teacher_can_set_doubt_in_progress_and_attach_reply_files(self):
+        thread = self.make_thread()
+        self.client.force_login(self.teacher_user)
+
+        status_response = self.client.post(
+            reverse("doubt_thread_detail", args=[thread.pk]),
+            {"action": "update_status", "status": DoubtThread.Status.IN_PROGRESS},
+        )
+        thread.refresh_from_db()
+        self.assertEqual(status_response.status_code, 302)
+        self.assertEqual(thread.status, DoubtThread.Status.IN_PROGRESS)
+
+        reply_response = self.client.post(
+            reverse("doubt_thread_detail", args=[thread.pk]),
+            {
+                "action": "reply",
+                "content": "Please see the attached worked solution.",
+                "attachments": SimpleUploadedFile("solution.pdf", b"%PDF-demo", content_type="application/pdf"),
+            },
+        )
+        self.assertEqual(reply_response.status_code, 302)
+        reply = DoubtReply.objects.get(thread=thread)
+        self.assertTrue(reply.is_teacher_reply)
+        self.assertEqual(reply.attachments.count(), 1)
+
+    def test_unassigned_teacher_cannot_change_doubt_status(self):
+        thread = self.make_thread()
+        other_user = User.objects.create_user(
+            username="forum-status-other", password="test-pass", role=User.Role.TEACHER
+        )
+        TeacherProfile.objects.create(user=other_user, employee_id="T-FORUM-STATUS")
+        self.client.force_login(other_user)
+
+        response = self.client.post(
+            reverse("doubt_thread_detail", args=[thread.pk]),
+            {"action": "update_status", "status": DoubtThread.Status.RESOLVED},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        thread.refresh_from_db()
+        self.assertEqual(thread.status, DoubtThread.Status.OPEN)
 
     def test_student_cannot_create_thread_for_another_class(self):
         self.client.force_login(self.student.user)
@@ -578,10 +733,18 @@ class ParentReadOnlyAccessTests(TestCase):
             student=self.student,
             student_class=self.student_class,
             subject=self.subject,
+            is_public=True,
         )
         self.client.force_login(self.parent_user)
 
     def test_parent_can_read_linked_child_pages_and_only_scoped_content(self):
+        private_thread = DoubtThread.objects.create(
+            title="Private child question",
+            content="This must stay private.",
+            student=self.student,
+            student_class=self.student_class,
+            subject=self.subject,
+        )
         dashboard = self.client.get(reverse("dashboard"))
         timetable = self.client.get(reverse("parent_timetable"))
         analytics = self.client.get(reverse("parent_analytics"))
@@ -604,6 +767,8 @@ class ParentReadOnlyAccessTests(TestCase):
         self.assertEqual(discussions.status_code, 200)
         self.assertContains(discussions, "Map scale question")
         self.assertFalse(discussions.context["can_create_thread"])
+        self.assertNotContains(discussions, private_thread.title)
+        self.assertEqual(self.client.get(reverse("doubt_thread_detail", args=[private_thread.pk])).status_code, 403)
         self.assertEqual(detail.status_code, 200)
         self.assertContains(detail, "read-only access")
         self.assertNotContains(detail, 'name="action" value="reply"')

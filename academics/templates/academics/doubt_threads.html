@@ -5,8 +5,8 @@
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
-        <h1 class="h3 mb-1">Subject Doubts &amp; Discussions</h1>
-        <p class="text-muted mb-0">{% if is_parent_view %}Read discussions for your child's class.{% else %}Ask questions and learn together with your class.{% endif %}</p>
+        <h1 class="h3 mb-1">{% if is_teacher_view %}Doubt Resolution Inbox{% else %}Subject Doubts &amp; Discussions{% endif %}</h1>
+        <p class="text-muted mb-0">{% if is_teacher_view %}Review student doubts across your assigned classes and subjects.{% elif is_parent_view %}Read discussions for your child's class.{% else %}Ask questions and learn together with your class.{% endif %}</p>
     </div>
     {% if can_create_thread %}
     <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#newQuestion">Ask a question</button>
@@ -17,7 +17,7 @@
 <div class="collapse mb-4" id="newQuestion">
     <div class="card card-body shadow-sm">
         <h2 class="h5">Start a discussion</h2>
-        <form method="post" action="{% url 'doubt_threads' %}?student_class={{ selected_class.pk }}">
+        <form method="post" enctype="multipart/form-data" action="{% url 'doubt_threads' %}?student_class={{ selected_class.pk }}">
             {% csrf_token %}
             <input type="hidden" name="student_class" value="{{ selected_class.pk }}">
             {% for field in thread_form %}
@@ -28,45 +28,123 @@
             </div>
             {% endfor %}
             {% for error in thread_form.non_field_errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+            <div class="form-text mb-3">Private is selected by default. Private doubts are visible only to you and the assigned teacher. Public doubts appear anonymously to classmates. Attachments are limited to 10 MB each.</div>
             <button class="btn btn-success" type="submit">Post question</button>
         </form>
     </div>
 </div>
 {% endif %}
 
+{% if is_teacher_view %}
+<form method="get" class="card card-body mb-4" id="teacherDoubtFilters">
+    <div class="row g-3 align-items-end">
+        {% for field in filter_form %}
+        {% if field.name == "student" %}
+        <div class="col-md-4">
+            <label class="form-label" for="studentSearch">Student</label>
+            <input type="search" class="form-control mb-2" id="studentSearch" placeholder="Type a student name, class, or username" autocomplete="off">
+            <div class="visually-hidden">{{ field.label }}</div>
+            {{ field }}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        {% elif field.name == "start_date" or field.name == "end_date" %}
+        <div class="col-md-2 date-range-field">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        {% else %}
+        <div class="col-md-3">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+        <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Apply filters</button></div>
+        <div class="col-md-2"><a class="btn btn-outline-secondary w-100" href="{% url 'doubt_threads' %}">Clear</a></div>
+    </div>
+</form>
+{% else %}
 <form method="get" class="card card-body mb-4">
     <div class="row g-3 align-items-end">
-        {% if classes|length > 1 %}
-        <div class="col-md-3">
-            <label class="form-label" for="classFilter">Class</label>
-            <select class="form-select" id="classFilter" name="student_class">
-                {% for class in classes %}<option value="{{ class.pk }}" {% if class.pk == selected_class.pk %}selected{% endif %}>{{ class }}</option>{% endfor %}
-            </select>
-        </div>
-        {% else %}<input type="hidden" name="student_class" value="{{ selected_class.pk }}">{% endif %}
-        <div class="col-md-3">
-            <label class="form-label" for="subjectFilter">Subject</label>
-            <select class="form-select" id="subjectFilter" name="subject">
-                <option value="">All subjects</option>
-                {% for subject in subjects %}<option value="{{ subject.pk }}" {% if subject.pk|stringformat:"s" == selected_subject %}selected{% endif %}>{{ subject.name }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label class="form-label" for="statusFilter">Status</label>
-            <select class="form-select" id="statusFilter" name="status">
-                <option value="ALL" {% if status_filter == "ALL" %}selected{% endif %}>All</option>
-                <option value="OPEN" {% if status_filter == "OPEN" %}selected{% endif %}>Open</option>
-                <option value="RESOLVED" {% if status_filter == "RESOLVED" %}selected{% endif %}>Resolved</option>
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label class="form-label" for="searchQuery">Search</label>
-            <input class="form-control" id="searchQuery" name="q" value="{{ search_query }}" placeholder="Title or keyword">
-        </div>
+        {% if classes|length > 1 %}<div class="col-md-3"><label class="form-label" for="classFilter">Class</label><select class="form-select" id="classFilter" name="student_class">{% for class in classes %}<option value="{{ class.pk }}" {% if class.pk == selected_class.pk %}selected{% endif %}>{{ class }}</option>{% endfor %}</select></div>{% else %}<input type="hidden" name="student_class" value="{{ selected_class.pk }}">{% endif %}
+        <div class="col-md-3"><label class="form-label" for="subjectFilter">Subject</label><select class="form-select" id="subjectFilter" name="subject"><option value="">All subjects</option>{% for subject in subjects %}<option value="{{ subject.pk }}" {% if subject.pk|stringformat:"s" == selected_subject %}selected{% endif %}>{{ subject.name }}</option>{% endfor %}</select></div>
+        <div class="col-md-2"><label class="form-label" for="statusFilter">Status</label><select class="form-select" id="statusFilter" name="status"><option value="ALL" {% if status_filter == "ALL" %}selected{% endif %}>All</option><option value="OPEN" {% if status_filter == "OPEN" %}selected{% endif %}>Open</option><option value="IN_PROGRESS" {% if status_filter == "IN_PROGRESS" %}selected{% endif %}>In Progress</option><option value="RESOLVED" {% if status_filter == "RESOLVED" %}selected{% endif %}>Resolved</option></select></div>
+        <div class="col-md-3"><label class="form-label" for="searchQuery">Search</label><input class="form-control" id="searchQuery" name="q" value="{{ search_query }}" placeholder="Title or keyword"></div>
         <div class="col-md-1"><button class="btn btn-outline-primary w-100" type="submit">Filter</button></div>
     </div>
 </form>
+{% endif %}
 
+{% if is_teacher_view %}
+<div class="d-flex flex-column gap-3">
+    {% for thread in threads %}
+    <article class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    {% if thread.student.profile_picture %}
+                        <img src="{{ thread.student.profile_picture.url }}" alt="{{ thread.student.user.get_full_name|default:thread.student.user.username }} profile picture" class="rounded-circle border" style="width:58px;height:58px;object-fit:cover">
+                    {% else %}
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:58px;height:58px" aria-label="Student avatar">{{ thread.student.user.first_name|default:thread.student.user.username|first|upper }}</div>
+                    {% endif %}
+                    <div>
+                        <div class="fw-semibold">{{ thread.student.user.get_full_name|default:thread.student.user.username }}</div>
+                        <div class="small text-muted">{{ thread.student_class }} · {{ thread.student.user.username }}</div>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <span class="badge text-bg-secondary">{{ thread.get_category_display }}</span>
+                    <span class="badge {% if thread.is_public %}text-bg-info{% else %}text-bg-warning{% endif %}">{% if thread.is_public %}Public{% else %}Private{% endif %}</span>
+                    <span class="badge {% if thread.status == 'RESOLVED' %}text-bg-success{% elif thread.status == 'IN_PROGRESS' %}text-bg-warning{% else %}text-bg-primary{% endif %}">{{ thread.get_status_display }}</span>
+                    <span class="small text-muted">{{ thread.created_at|date:"M j, Y · H:i" }}</span>
+                </div>
+            </div>
+            <div class="mt-3">
+                <h2 class="h5 mb-1">{{ thread.title }}</h2>
+                <div class="small text-muted mb-2">{{ thread.subject.name }}</div>
+                <p class="mb-2">{{ thread.content|truncatewords:32 }}</p>
+                {% if thread.attachment_count %}<div class="small text-muted mb-3"><i class="bi bi-paperclip"></i> {{ thread.attachment_count }} attached file{{ thread.attachment_count|pluralize }}</div>{% endif %}
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <a class="btn btn-outline-primary btn-sm" href="{% url 'doubt_thread_detail' thread.pk %}">Open doubt and reply</a>
+                    <form method="post" action="{% url 'doubt_thread_detail' thread.pk %}" class="d-flex align-items-center gap-2">
+                        {% csrf_token %}<input type="hidden" name="action" value="update_status">
+                        <label class="small text-muted" for="status-{{ thread.pk }}">Update status</label>
+                        <select class="form-select form-select-sm" id="status-{{ thread.pk }}" name="status">
+                            {% for value, label in status_choices %}<option value="{{ value }}" {% if thread.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary" type="submit">Save</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </article>
+    {% empty %}<div class="card card-body text-center text-muted py-5">No doubts match these filters.</div>{% endfor %}
+</div>
+<script>
+    const studentSearch = document.getElementById("studentSearch");
+    const studentSelect = document.getElementById("studentFilter");
+    if (studentSearch && studentSelect) {
+        studentSearch.addEventListener("input", () => {
+            const term = studentSearch.value.toLocaleLowerCase();
+            for (const option of studentSelect.options) {
+                option.hidden = Boolean(term) && !option.text.toLocaleLowerCase().includes(term);
+            }
+        });
+    }
+    const dateRange = document.getElementById("dateRangeFilter");
+    const dateFields = document.querySelectorAll(".date-range-field");
+    function toggleCustomDates() {
+        const show = dateRange && dateRange.value === "CUSTOM";
+        dateFields.forEach(field => field.classList.toggle("d-none", !show));
+    }
+    if (dateRange) {
+        dateRange.addEventListener("change", toggleCustomDates);
+        toggleCustomDates();
+    }
+</script>
+{% else %}
 <div class="list-group shadow-sm">
     {% for thread in threads %}
     <a class="list-group-item list-group-item-action p-3" href="{% url 'doubt_thread_detail' thread.pk %}">
@@ -74,9 +152,11 @@
             <div>
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                     <h2 class="h5 mb-0">{{ thread.title }}</h2>
-                    <span class="badge {% if thread.status == 'OPEN' %}text-bg-primary{% else %}text-bg-success{% endif %}">{{ thread.get_status_display }}</span>
+                    <span class="badge {% if thread.status == 'RESOLVED' %}text-bg-success{% elif thread.status == 'IN_PROGRESS' %}text-bg-warning{% else %}text-bg-primary{% endif %}">{{ thread.get_status_display }}</span>
+                    <span class="badge text-bg-secondary">{{ thread.get_category_display }}</span>
+                    {% if not thread.is_public %}<span class="badge text-bg-warning">Private</span>{% endif %}
                 </div>
-                <p class="text-muted mb-2">{{ thread.subject.name }} · Asked by {{ thread.student.user.get_full_name|default:thread.student.user.username }}</p>
+                <p class="text-muted mb-2">{{ thread.subject.name }} · Asked by {% if thread.is_public and not is_teacher_view %}{% if thread.student.user_id == request.user.id %}You (anonymous to classmates){% else %}Anonymous{% endif %}{% else %}{{ thread.student.user.get_full_name|default:thread.student.user.username }}{% endif %}</p>
                 <p class="mb-0">{{ thread.content|truncatewords:28 }}</p>
             </div>
             <small class="text-muted text-nowrap">{{ thread.created_at|date:"M j, Y · H:i" }}</small>
@@ -86,4 +166,5 @@
     <div class="list-group-item text-center text-muted py-5">No discussions match these filters yet.</div>
     {% endfor %}
 </div>
+{% endif %}
 {% endblock %}

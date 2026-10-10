@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.validators import FileExtensionValidator
+from .storage import PrivateDoubtAttachmentStorage
 
 
 class Class(models.Model):
@@ -283,12 +285,26 @@ class Assessment(models.Model):
 
 
 class DoubtThread(models.Model):
+    class Category(models.TextChoices):
+        SYLLABUS_TOPIC = "SYLLABUS_TOPIC", "Syllabus / Topic"
+        ASSIGNMENT_HOMEWORK = "ASSIGNMENT_HOMEWORK", "Assignment / Homework"
+        NOTICE_ANNOUNCEMENT = "NOTICE_ANNOUNCEMENT", "Notice / Announcement"
+        STUDY_RESOURCE = "STUDY_RESOURCE", "Study Resource"
+
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
         RESOLVED = "RESOLVED", "Resolved"
 
     title = models.CharField(max_length=200)
     content = models.TextField()
+    category = models.CharField(
+        max_length=24,
+        choices=Category.choices,
+        default=Category.SYLLABUS_TOPIC,
+    )
+    is_public = models.BooleanField(default=False)
+    document_link = models.URLField(blank=True)
     student = models.ForeignKey(
         "accounts.StudentProfile",
         on_delete=models.CASCADE,
@@ -305,7 +321,7 @@ class DoubtThread(models.Model):
         related_name="doubt_threads",
     )
     status = models.CharField(
-        max_length=10,
+        max_length=11,
         choices=Status.choices,
         default=Status.OPEN,
     )
@@ -316,6 +332,34 @@ class DoubtThread(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class DoubtAttachment(models.Model):
+    thread = models.ForeignKey(
+        DoubtThread,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    reply = models.ForeignKey(
+        "DoubtReply",
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        null=True,
+        blank=True,
+    )
+    file = models.FileField(
+        upload_to="doubt_attachments/%Y/%m/",
+        storage=PrivateDoubtAttachmentStorage(),
+        blank=True,
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "pdf"])],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")
+
+    def __str__(self):
+        return self.file.name.rsplit("/", 1)[-1]
 
 
 class DoubtReply(models.Model):

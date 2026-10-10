@@ -114,7 +114,10 @@ def question_create(request, assessment_id):
         )
         return redirect("dashboard")
 
-    next_question_number = assessment.questions.count() + 1
+    existing_questions = assessment.questions.all()
+    existing_question_count = existing_questions.count()
+    existing_question_marks = sum(question.marks for question in existing_questions)
+    next_question_number = existing_question_count + 1
 
     if request.method == "POST":
         action = request.POST.get("action", "next")
@@ -234,6 +237,8 @@ def question_create(request, assessment_id):
         {
             "assessment": assessment,
             "question_number": next_question_number,
+            "existing_question_count": existing_question_count,
+            "existing_question_marks": existing_question_marks,
         }
     )
 
@@ -264,8 +269,18 @@ def test_preview(request, assessment_id):
 
     if request.method == "POST":
         if request.POST.get("action") == "publish":
-            if not assessment.questions.exists():
+            questions = assessment.questions.all()
+            question_count = questions.count()
+            calculated_total_marks = sum(question.marks for question in questions)
+            if question_count == 0:
                 messages.error(request, "Add at least one question before publishing this assessment.")
+            elif calculated_total_marks != assessment.total_marks:
+                messages.error(
+                    request,
+                    "This assessment cannot be published until the marks assigned to all "
+                    f"{question_count} question(s) total {assessment.total_marks}. "
+                    f"They currently total {calculated_total_marks}.",
+                )
             else:
                 assessment.is_published = True
                 assessment.save(update_fields=["is_published"])
@@ -296,6 +311,7 @@ def test_preview(request, assessment_id):
         question.marks
         for question in questions
     )
+    marks_match = calculated_total_marks == assessment.total_marks
 
     return render(
         request,
@@ -305,6 +321,7 @@ def test_preview(request, assessment_id):
             "questions": questions,
             "question_count": questions.count(),
             "calculated_total_marks": calculated_total_marks,
+            "marks_match": marks_match,
         }
     )
 

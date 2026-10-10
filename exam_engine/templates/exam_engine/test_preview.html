@@ -135,6 +135,20 @@
                 {{ calculated_total_marks }}
             </div>
 
+            <div class="col-12">
+                {% if marks_match %}
+                    <div class="alert alert-success" role="status">
+                        {{ question_count }} question{{ question_count|pluralize }} total {{ calculated_total_marks }} marks, matching the configured total of {{ assessment.total_marks }}.
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Review before publishing:</strong>
+                        {{ question_count }} question{{ question_count|pluralize }} currently total {{ calculated_total_marks }} marks, but this assessment is configured for {{ assessment.total_marks }} marks.
+                        Adjust the questions or configured total so they match. Publishing is unavailable until they match.
+                    </div>
+                {% endif %}
+            </div>
+
             <div class="col-md-4 mb-3"><strong>Attempts:</strong><br>{% if assessment.max_attempts == 0 %}Unlimited{% else %}{{ assessment.max_attempts }}{% endif %}</div>
             <div class="col-md-4 mb-3"><strong>Passmark:</strong><br>{{ assessment.passmark_percentage|floatformat:1 }}%</div>
             <div class="col-md-4 mb-3"><strong>Question order:</strong><br>{% if assessment.shuffle_questions %}Shuffled per attempt{% else %}Fixed{% endif %}</div>
@@ -439,7 +453,7 @@
             {% if assessment.is_published %}
                 <button type="submit" name="action" value="unpublish" class="btn btn-outline-warning">Unpublish</button>
             {% else %}
-                <button type="submit" name="action" value="publish" class="btn btn-success">Publish for Students</button>
+                <button type="submit" name="action" value="publish" class="btn btn-success" {% if not marks_match or not question_count %}disabled{% endif %}>Publish for Students</button>
             {% endif %}
         </form>
 

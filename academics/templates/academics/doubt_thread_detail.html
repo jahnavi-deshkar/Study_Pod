@@ -10,20 +10,36 @@
             <div>
                 <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
                     <h1 class="h3 mb-0">{{ thread.title }}</h1>
-                    <span class="badge {% if thread.status == 'OPEN' %}text-bg-primary{% else %}text-bg-success{% endif %}">{{ thread.get_status_display }}</span>
+                    <span class="badge {% if thread.status == 'RESOLVED' %}text-bg-success{% elif thread.status == 'IN_PROGRESS' %}text-bg-warning{% else %}text-bg-primary{% endif %}">{{ thread.get_status_display }}</span>
                 </div>
-                <div class="text-muted">{{ thread.subject.name }} · {{ thread.student_class }}</div>
+                <div class="text-muted">{{ thread.subject.name }} · {{ thread.student_class }} · {{ thread.get_category_display }}</div>
+                {% if thread.is_public %}<span class="badge text-bg-info mt-2">Public · anonymous to classmates</span>{% else %}<span class="badge text-bg-warning mt-2">Private · visible to you and assigned teacher</span>{% endif %}
             </div>
-            {% if can_resolve %}
+            {% if can_update_status %}
+            <form method="post" class="d-flex align-items-center gap-2">
+                {% csrf_token %}<input type="hidden" name="action" value="update_status">
+                <label class="visually-hidden" for="detailDoubtStatus">Update doubt status</label>
+                <select class="form-select form-select-sm" id="detailDoubtStatus" name="status">
+                    {% for value, label in status_choices %}<option value="{{ value }}" {% if thread.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <button class="btn btn-outline-primary btn-sm" type="submit">Update status</button>
+            </form>
+            {% elif can_resolve %}
             <form method="post">
                 {% csrf_token %}<input type="hidden" name="action" value="resolve">
-                <button class="btn btn-outline-success" type="submit">{% if thread.status == "OPEN" %}Mark resolved{% else %}Reopen question{% endif %}</button>
+                <button class="btn btn-outline-success" type="submit">{% if thread.status == "RESOLVED" %}Reopen question{% else %}Mark resolved{% endif %}</button>
             </form>
             {% endif %}
         </div>
         <hr>
         <p class="mb-3" style="white-space: pre-wrap">{{ thread.content }}</p>
-        <div class="small text-muted">Asked by {{ thread.student.user.get_full_name|default:thread.student.user.username }} · {{ thread.created_at|date:"M j, Y · H:i" }}</div>
+        {% if thread.document_link %}<p><strong>Document link:</strong> <a href="{{ thread.document_link }}" target="_blank" rel="noopener noreferrer">Open linked document</a></p>{% endif %}
+        {% if attachments %}
+        <div class="mb-3"><strong>Attachments</strong>
+            <ul class="mb-0">{% for attachment in attachments %}<li><a href="{% url 'doubt_attachment_download' attachment.pk %}">{{ attachment.file.name|cut:"doubt_attachments/" }}</a></li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+        <div class="small text-muted">Asked by {% if show_author_identity %}{{ thread.student.user.get_full_name|default:thread.student.user.username }}{% elif is_author %}You (posted anonymously to classmates){% elif thread.is_public %}Anonymous{% else %}Student{% endif %} · {{ thread.created_at|date:"M j, Y · H:i" }}</div>
     </div>
 </article>
 
@@ -39,6 +55,9 @@
                 <small class="text-muted">{{ reply.created_at|date:"M j, Y · H:i" }}</small>
             </div>
             <div style="white-space: pre-wrap">{{ reply.content }}</div>
+            {% if reply.attachments.all %}
+            <div class="mt-2"><strong class="small">Attached files</strong><ul class="small mb-0">{% for attachment in reply.attachments.all %}<li><a href="{% url 'doubt_attachment_download' attachment.pk %}">{{ attachment.file.name|cut:"doubt_attachments/" }}</a></li>{% endfor %}</ul></div>
+            {% endif %}
         </div>
     </article>
     {% empty %}
@@ -51,12 +70,18 @@
 {% elif can_reply %}
 <div class="card card-body shadow-sm">
     <h2 class="h5">Add a reply</h2>
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         {% csrf_token %}<input type="hidden" name="action" value="reply">
         <div class="mb-3">
             <label class="form-label" for="{{ reply_form.content.id_for_label }}">Your reply</label>
             {{ reply_form.content }}
             {% for error in reply_form.content.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="{{ reply_form.attachments.id_for_label }}">Attach files (optional)</label>
+            {{ reply_form.attachments }}
+            <div class="form-text">{{ reply_form.attachments.help_text }}</div>
+            {% for error in reply_form.attachments.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
         <button class="btn btn-primary" type="submit">Post reply</button>
     </form>

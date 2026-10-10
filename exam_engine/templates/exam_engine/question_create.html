@@ -115,6 +115,15 @@
     </div>
 
 
+    <div class="alert alert-info" role="status">
+        <strong>Assessment totals:</strong>
+        <span id="questionCountSummary">{{ existing_question_count }} saved question{{ existing_question_count|pluralize }}</span> ·
+        <span id="marksSummary">{{ existing_question_marks }} marks assigned</span> of {{ assessment.total_marks }} total marks.
+        <span id="pendingMarksSummary"></span>
+        Add questions until the assigned marks equal the assessment total. Publishing is blocked while they differ.
+    </div>
+
+
     <!-- Question form -->
 
     <div class="question-card">
@@ -247,6 +256,7 @@
                     <input
                         type="number"
                         name="marks"
+                        id="questionMarks"
                         class="form-control"
                         value="1"
                         min="1"
@@ -957,6 +967,35 @@
         }
     );
 
+</script>
+
+<script>
+    const existingQuestionCount = Number("{{ existing_question_count }}");
+    const existingQuestionMarks = Number("{{ existing_question_marks }}");
+    const configuredTotalMarks = Number("{{ assessment.total_marks }}");
+    const marksInput = document.getElementById("questionMarks");
+    const questionCountSummary = document.getElementById("questionCountSummary");
+    const marksSummary = document.getElementById("marksSummary");
+    const pendingMarksSummary = document.getElementById("pendingMarksSummary");
+
+    function updateAssessmentTotals() {
+        const rawMarks = Number(marksInput.value);
+        const hasValidMarks = Number.isInteger(rawMarks) && rawMarks > 0;
+        const projectedMarks = existingQuestionMarks + (hasValidMarks ? rawMarks : 0);
+        const projectedCount = existingQuestionCount + (hasValidMarks ? 1 : 0);
+
+        questionCountSummary.textContent = `${projectedCount} question${projectedCount === 1 ? "" : "s"} after saving`;
+        marksSummary.textContent = `${projectedMarks} marks assigned`;
+        pendingMarksSummary.textContent = hasValidMarks
+            ? ` · after saving this question: ${projectedMarks} / ${configuredTotalMarks} marks`
+            : " · enter valid marks to preview the new total";
+        pendingMarksSummary.className = hasValidMarks && projectedMarks === configuredTotalMarks
+            ? "text-success fw-semibold"
+            : "text-warning-emphasis fw-semibold";
+    }
+
+    marksInput.addEventListener("input", updateAssessmentTotals);
+    updateAssessmentTotals();
 </script>
 
 </body>

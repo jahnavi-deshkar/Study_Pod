@@ -156,3 +156,8 @@ MAILERS = {
 AUTH_USER_MODEL = "accounts.User"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Prevent publishing assessments when question marks do not add up to the
+# configured total. Administrators may set this to False to allow an explicit
+# "Proceed Anyway" choice in the teacher preview confirmation.
+ASSESSMENT_MARKS_STRICT = True

@@ -86,6 +86,13 @@
             flex-wrap: wrap;
         }
 
+        .assessment-mark-summary {
+            position: sticky;
+            top: .5rem;
+            z-index: 1020;
+            box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .12);
+        }
+
     </style>
 
 </head>
@@ -115,13 +122,39 @@
     </div>
 
 
-    <div class="alert alert-info" role="status">
-        <strong>Assessment totals:</strong>
-        <span id="questionCountSummary">{{ existing_question_count }} saved question{{ existing_question_count|pluralize }}</span> ·
-        <span id="marksSummary">{{ existing_question_marks }} marks assigned</span> of {{ assessment.total_marks }} total marks.
-        <span id="pendingMarksSummary"></span>
-        Add questions until the assigned marks equal the assessment total. Publishing is blocked while they differ.
+    <div class="card card-body assessment-mark-summary mb-4" aria-live="polite">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <strong>Assessment marks</strong>
+            <span><span id="questionCountSummary">{{ existing_question_count }} saved question{{ existing_question_count|pluralize }}</span> ? Allocated: <strong><span id="marksSummary">{{ existing_question_marks }}</span> / {{ assessment.total_marks }} Marks</strong></span>
+        </div>
+        <div id="markMismatchWarning" class="alert alert-warning mt-3 mb-0 {% if existing_question_marks == assessment.total_marks %}d-none{% endif %}" role="alert"></div>
+        <div id="markMatchMessage" class="text-success fw-semibold mt-2 {% if existing_question_marks != assessment.total_marks %}d-none{% endif %}" role="status">Question marks match the configured test total.</div>
+        <div id="pendingMarksSummary" class="small text-muted mt-2"></div>
+        <div class="small text-muted mt-2">Your assessment remains saved as a draft while unpublished. Publishing is blocked until question marks match the test total.</div>
     </div>
+
+    {% if existing_questions %}
+    <div class="card card-body mb-4">
+        <h2 class="h5">Saved questions</h2>
+        <div class="list-group">
+            {% for saved_question in existing_questions %}
+            <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="me-auto"><strong>Question {{ saved_question.order }}</strong><div class="small text-muted">{{ saved_question.question_text|truncatewords:18 }}</div></div>
+                <form method="post" class="d-flex align-items-center gap-2">
+                    {% csrf_token %}<input type="hidden" name="action" value="update_marks"><input type="hidden" name="question_id" value="{{ saved_question.pk }}">
+                    <label class="small" for="saved-marks-{{ saved_question.pk }}">Marks</label>
+                    <input type="number" name="marks" id="saved-marks-{{ saved_question.pk }}" class="form-control form-control-sm saved-question-marks" style="width:6rem" min="1" required value="{{ saved_question.marks }}" data-original-marks="{{ saved_question.marks }}" aria-label="Marks for question {{ saved_question.order }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                </form>
+                <form method="post" onsubmit="return confirm('Delete Question {{ saved_question.order }}?');">
+                    {% csrf_token %}<input type="hidden" name="action" value="delete_question"><input type="hidden" name="question_id" value="{{ saved_question.pk }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
 
     <!-- Question form -->
@@ -974,27 +1007,50 @@
     const existingQuestionMarks = Number("{{ existing_question_marks }}");
     const configuredTotalMarks = Number("{{ assessment.total_marks }}");
     const marksInput = document.getElementById("questionMarks");
+    const questionTextInput = document.querySelector('[name="question_text"]');
     const questionCountSummary = document.getElementById("questionCountSummary");
     const marksSummary = document.getElementById("marksSummary");
     const pendingMarksSummary = document.getElementById("pendingMarksSummary");
+    const mismatchWarning = document.getElementById("markMismatchWarning");
+    const matchMessage = document.getElementById("markMatchMessage");
+    const savedMarkInputs = Array.from(document.querySelectorAll(".saved-question-marks"));
+    let pendingQuestionMarksTouched = false;
 
     function updateAssessmentTotals() {
+        const editedSavedMarks = savedMarkInputs.reduce((sum, input) => {
+            const value = Number(input.value);
+            const marks = Number.isInteger(value) && value > 0 ? value : Number(input.dataset.originalMarks);
+            return sum + marks;
+        }, 0);
         const rawMarks = Number(marksInput.value);
-        const hasValidMarks = Number.isInteger(rawMarks) && rawMarks > 0;
-        const projectedMarks = existingQuestionMarks + (hasValidMarks ? rawMarks : 0);
-        const projectedCount = existingQuestionCount + (hasValidMarks ? 1 : 0);
+        const hasValidNewMarks = Number.isInteger(rawMarks) && rawMarks > 0;
+        const hasPendingQuestion = questionTextInput.value.trim().length > 0 || pendingQuestionMarksTouched;
+        const projectedMarks = editedSavedMarks + (hasPendingQuestion && hasValidNewMarks ? rawMarks : 0);
+        const projectedCount = existingQuestionCount + (hasPendingQuestion && hasValidNewMarks ? 1 : 0);
+        const delta = configuredTotalMarks - projectedMarks;
 
-        questionCountSummary.textContent = `${projectedCount} question${projectedCount === 1 ? "" : "s"} after saving`;
-        marksSummary.textContent = `${projectedMarks} marks assigned`;
-        pendingMarksSummary.textContent = hasValidMarks
-            ? ` · after saving this question: ${projectedMarks} / ${configuredTotalMarks} marks`
-            : " · enter valid marks to preview the new total";
-        pendingMarksSummary.className = hasValidMarks && projectedMarks === configuredTotalMarks
-            ? "text-success fw-semibold"
-            : "text-warning-emphasis fw-semibold";
+        questionCountSummary.textContent = `${projectedCount} question${projectedCount === 1 ? "" : "s"}${hasPendingQuestion ? " after saving" : " saved"}`;
+        marksSummary.textContent = projectedMarks;
+        matchMessage.classList.toggle("d-none", delta !== 0);
+        mismatchWarning.classList.toggle("d-none", delta === 0);
+        mismatchWarning.classList.toggle("alert-warning", delta > 0);
+        mismatchWarning.classList.toggle("alert-danger", delta < 0);
+        if (delta > 0) {
+            mismatchWarning.textContent = `Warning: Total question marks (${projectedMarks}) fall short of the total test marks (${configuredTotalMarks}). Please add ${delta} more marks worth of questions or adjust question scoring.`;
+        } else if (delta < 0) {
+            mismatchWarning.textContent = `Warning: Total question marks (${projectedMarks}) exceed the total test marks (${configuredTotalMarks}). Please reduce question marks by ${Math.abs(delta)} or adjust the total test marks.`;
+        }
+        pendingMarksSummary.textContent = hasPendingQuestion
+            ? `Preview includes the new question at ${hasValidNewMarks ? rawMarks : 0} marks; saved-question mark edits are included.`
+            : "Change a saved question?s marks or enter a new question to preview the updated allocation.";
     }
 
-    marksInput.addEventListener("input", updateAssessmentTotals);
+    marksInput.addEventListener("input", () => {
+        pendingQuestionMarksTouched = true;
+        updateAssessmentTotals();
+    });
+    questionTextInput.addEventListener("input", updateAssessmentTotals);
+    savedMarkInputs.forEach(input => input.addEventListener("input", updateAssessmentTotals));
     updateAssessmentTotals();
 </script>
 

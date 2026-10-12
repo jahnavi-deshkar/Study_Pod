@@ -143,8 +143,12 @@
                 {% else %}
                     <div class="alert alert-warning" role="alert">
                         <strong>Review before publishing:</strong>
-                        {{ question_count }} question{{ question_count|pluralize }} currently total {{ calculated_total_marks }} marks, but this assessment is configured for {{ assessment.total_marks }} marks.
-                        Adjust the questions or configured total so they match. Publishing is unavailable until they match.
+                        {% if calculated_total_marks < assessment.total_marks %}
+                            Warning: Total question marks ({{ calculated_total_marks }}) fall short of the total test marks ({{ assessment.total_marks }}). Please add {{ mark_difference }} more marks worth of questions or adjust question scoring.
+                        {% else %}
+                            Warning: Total question marks ({{ calculated_total_marks }}) exceed the total test marks ({{ assessment.total_marks }}). Please reduce question marks by {{ mark_difference }} or adjust the total test marks.
+                        {% endif %}
+                        {% if strict_mark_validation %}Publishing is disabled until the totals match.{% endif %}
                     </div>
                 {% endif %}
             </div>
@@ -453,7 +457,7 @@
             {% if assessment.is_published %}
                 <button type="submit" name="action" value="unpublish" class="btn btn-outline-warning">Unpublish</button>
             {% else %}
-                <button type="submit" name="action" value="publish" class="btn btn-success" {% if not marks_match or not question_count %}disabled{% endif %}>Publish for Students</button>
+                <button id="publishAssessmentButton" type="submit" name="action" value="publish" class="btn btn-success" {% if not question_count %}disabled{% endif %}>Publish for Students</button>
             {% endif %}
         </form>
 
@@ -471,6 +475,58 @@
     </div>
 
 </div>
+
+{% if not assessment.is_published and question_count %}
+<div class="modal fade" id="marksMismatchModal" tabindex="-1" aria-labelledby="marksMismatchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="marksMismatchModalLabel">Question marks do not match</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="marksMismatchModalSummary" class="mb-2"></p>
+                {% if strict_mark_validation %}
+                <p class="text-muted mb-0">Publishing is locked until the totals match. You can correct the questions or update the test total.</p>
+                {% else %}
+                <p class="text-muted mb-0">Strict mark validation is disabled by the administrator. You may publish with this mismatch if intended.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer flex-wrap">
+                <a class="btn btn-outline-secondary me-auto" href="{% url 'question_create' assessment.id %}">Go Back &amp; Fix</a>
+                <form method="post">
+                    {% csrf_token %}<input type="hidden" name="action" value="auto_update_total">
+                    <button type="submit" class="btn btn-primary">Auto-Update Total Marks</button>
+                </form>
+                {% if not strict_mark_validation %}
+                <form method="post">
+                    {% csrf_token %}<input type="hidden" name="action" value="publish">
+                    <button type="submit" class="btn btn-warning">Proceed Anyway</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const publishButton = document.getElementById("publishAssessmentButton");
+    const marksMatch = {{ marks_match|yesno:"true,false" }};
+    if (publishButton && !marksMatch) {
+        publishButton.addEventListener("click", function (event) {
+            event.preventDefault();
+            const totalMarks = Number("{{ assessment.total_marks }}");
+            const questionMarks = Number("{{ calculated_total_marks }}");
+            const delta = totalMarks - questionMarks;
+            const summary = delta > 0
+                ? `Question marks (${questionMarks}) fall short of the test total (${totalMarks}) by ${delta} marks.`
+                : `Question marks (${questionMarks}) exceed the test total (${totalMarks}) by ${Math.abs(delta)} marks.`;
+            document.getElementById("marksMismatchModalSummary").textContent = summary;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("marksMismatchModal")).show();
+        });
+    }
+</script>
+{% endif %}
 
 </body>
 </html>

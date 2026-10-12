@@ -3,6 +3,7 @@ import random
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -113,7 +114,6 @@ def question_create(request, assessment_id):
             "Assessment not found or you do not have permission to edit it."
         )
         return redirect("dashboard")
-
     existing_questions = assessment.questions.all()
     existing_question_count = existing_questions.count()
     existing_question_marks = sum(question.marks for question in existing_questions)
@@ -121,6 +121,40 @@ def question_create(request, assessment_id):
 
     if request.method == "POST":
         action = request.POST.get("action", "next")
+        if action in {"update_marks", "delete_question"}:
+            if assessment.is_published:
+                messages.error(request, "Unpublish this assessment before changing its questions.")
+                return redirect("test_preview", assessment_id=assessment.id)
+            try:
+                question_id = int(request.POST.get("question_id", ""))
+            except (TypeError, ValueError):
+                question_id = None
+            question = Question.objects.filter(
+                assessment=assessment,
+                pk=question_id,
+            ).first()
+            if question is None:
+                messages.error(request, "That question could not be found in this assessment.")
+                return redirect("question_create", assessment_id=assessment.id)
+            if action == "delete_question":
+                question.delete()
+                for order, remaining in enumerate(assessment.questions.order_by("order", "pk"), start=1):
+                    if remaining.order != order:
+                        remaining.order = order
+                        remaining.save(update_fields=["order"])
+                messages.success(request, "Question deleted. Assessment totals have been recalculated.")
+            else:
+                try:
+                    updated_marks = int(request.POST.get("marks", ""))
+                    if updated_marks < 1:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    messages.error(request, "Marks must be a positive whole number.")
+                    return redirect("question_create", assessment_id=assessment.id)
+                question.marks = updated_marks
+                question.save(update_fields=["marks"])
+                messages.success(request, "Question marks updated. Assessment totals have been recalculated.")
+            return redirect("question_create", assessment_id=assessment.id)
         question_text = (request.POST.get("question_text") or "").strip()
         question_type = request.POST.get("question_type")
         option_texts = request.POST.getlist("option_text")
@@ -239,6 +273,7 @@ def question_create(request, assessment_id):
             "question_number": next_question_number,
             "existing_question_count": existing_question_count,
             "existing_question_marks": existing_question_marks,
+            "existing_questions": existing_questions,
         }
     )
 
@@ -268,13 +303,28 @@ def test_preview(request, assessment_id):
         return redirect("dashboard")
 
     if request.method == "POST":
-        if request.POST.get("action") == "publish":
+        action = request.POST.get("action")
+        if action == "auto_update_total":
+            if assessment.is_published:
+                messages.error(request, "Unpublish this assessment before changing its total marks.")
+            else:
+                questions = assessment.questions.all()
+                question_count = questions.count()
+                calculated_total_marks = sum(question.marks for question in questions)
+                if question_count == 0:
+                    messages.error(request, "Add at least one question before updating the assessment total.")
+                else:
+                    assessment.total_marks = calculated_total_marks
+                    assessment.save(update_fields=["total_marks"])
+                    messages.success(request, f"Assessment total updated to {calculated_total_marks} marks.")
+        elif action == "publish":
             questions = assessment.questions.all()
             question_count = questions.count()
             calculated_total_marks = sum(question.marks for question in questions)
+            strict_mark_validation = getattr(settings, "ASSESSMENT_MARKS_STRICT", True)
             if question_count == 0:
                 messages.error(request, "Add at least one question before publishing this assessment.")
-            elif calculated_total_marks != assessment.total_marks:
+            elif calculated_total_marks != assessment.total_marks and strict_mark_validation:
                 messages.error(
                     request,
                     "This assessment cannot be published until the marks assigned to all "
@@ -312,6 +362,8 @@ def test_preview(request, assessment_id):
         for question in questions
     )
     marks_match = calculated_total_marks == assessment.total_marks
+    mark_difference = abs(assessment.total_marks - calculated_total_marks)
+    strict_mark_validation = getattr(settings, "ASSESSMENT_MARKS_STRICT", True)
 
     return render(
         request,
@@ -322,6 +374,8 @@ def test_preview(request, assessment_id):
             "question_count": questions.count(),
             "calculated_total_marks": calculated_total_marks,
             "marks_match": marks_match,
+            "mark_difference": mark_difference,
+            "strict_mark_validation": strict_mark_validation,
         }
     )
 

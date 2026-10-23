@@ -44,7 +44,7 @@ python manage.py createsuperuser
 These predictable credentials are for local development only. Do not expose them or reuse them in a deployed environment. The sample assessment is a draft and has no questions until a teacher adds them.
 
 ## Environment Configuration
-
+testing
 For convenience, local development defaults to `DEBUG=True`, a development-only secret key, and local allowed hosts. Configure these variables explicitly for deployment:
 
 | Variable | Purpose | Production example |

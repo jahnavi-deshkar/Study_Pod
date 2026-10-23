@@ -161,3 +161,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # configured total. Administrators may set this to False to allow an explicit
 # "Proceed Anyway" choice in the teacher preview confirmation.
 ASSESSMENT_MARKS_STRICT = True
+
+# Retroactive requests are disabled unless the leave policy explicitly permits
+# emergency leave after its start date.
+LEAVE_ALLOW_RETROACTIVE_EMERGENCY = False

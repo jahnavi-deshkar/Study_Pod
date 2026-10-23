@@ -4,6 +4,9 @@ from . import views
 
 
 urlpatterns = [
+    path("student/leave/", views.student_leave_page, name="student_leave_page"),
+    path("teacher/leaves/", views.teacher_leave_page, name="teacher_leave_page"),
+    path("parent/leaves/", views.parent_leave_page, name="parent_leave_page"),
     path("teacher/attendance/", views.teacher_attendance, name="teacher_attendance"),
     path("student/attendance/", views.student_attendance, name="academics_student_attendance"),
     path("discussions/", views.doubt_threads, name="doubt_threads"),

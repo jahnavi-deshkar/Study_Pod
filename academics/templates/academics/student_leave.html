@@ -1,0 +1,74 @@
+{% extends "accounts/base.html" %}
+{% block title %}My Leave Applications | StudyPod{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1 class="h3 mb-1">My Leave Applications</h1>
+    <p class="text-muted">Apply for leave and track decisions.</p>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Approved days · {{ current_year }}</div><div class="display-6 text-success">{{ approved_days }}</div></div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Pending applications</div><div class="display-6 text-warning">{{ pending_count }}</div></div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Rejected / action required</div><div class="display-6 text-danger">{{ rejected_count }}</div></div></div></div>
+    </div>
+    <div id="leaveFormMessage"></div>
+    <div class="card shadow-sm mb-4"><div class="card-body">
+        <h2 class="h5">New leave application</h2>
+        <form id="leaveApplicationForm" method="post" enctype="multipart/form-data" action="{% url 'leave_apply_api' %}">
+            {% csrf_token %}<div class="row g-3">
+                <div class="col-md-6"><label class="form-label" for="{{ leave_form.leave_type.id_for_label }}">Leave type</label>{{ leave_form.leave_type }}</div>
+                <div class="col-md-3"><label class="form-label" for="{{ leave_form.start_date.id_for_label }}">Start date</label>{{ leave_form.start_date }}</div>
+                <div class="col-md-3"><label class="form-label" for="{{ leave_form.end_date.id_for_label }}">End date</label>{{ leave_form.end_date }}</div>
+                <div class="col-12 small text-muted">Duration: <strong id="leaveDayCount">Select dates to calculate days</strong></div>
+                <div class="col-12"><label class="form-label" for="{{ leave_form.reason.id_for_label }}">Reason / explanation</label>{{ leave_form.reason }}</div>
+                <div class="col-12"><label class="form-label" for="{{ leave_form.attachments.id_for_label }}">{{ leave_form.attachments.label }}</label>{{ leave_form.attachments }}<div class="form-text">{{ leave_form.attachments.help_text }}</div></div>
+                <div class="col-12"><div class="form-check">{{ leave_form.parent_acknowledgement }}<label class="form-check-label" for="{{ leave_form.parent_acknowledgement.id_for_label }}">Send a copy to my linked parent's portal</label></div></div>
+                <div class="col-12"><button class="btn btn-primary" type="submit">Submit application</button></div>
+            </div>
+        </form>
+    </div></div>
+    <div class="card shadow-sm"><div class="card-body"><h2 class="h5 mb-3">Application history</h2>
+        {% if applications %}<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Date range</th><th>Duration</th><th>Type</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>
+        {% for application in applications %}<tr>
+            <td>{{ application.start_date|date:"d M Y" }}{% if application.end_date != application.start_date %} – {{ application.end_date|date:"d M Y" }}{% endif %}</td>
+            <td>{{ application.total_days }} day{{ application.total_days|pluralize }}</td><td>{{ application.get_leave_type_display }}</td><td>{{ application.created_at|date:"d M Y" }}</td>
+            <td>{% if application.status == "APPROVED" %}<span class="badge text-bg-success">Approved</span>{% elif application.status == "REJECTED" %}<span class="badge text-bg-danger">Rejected</span>{% elif application.status == "CANCELLED" %}<span class="badge text-bg-secondary">Cancelled</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}</td>
+            <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary view-leave" data-leave-id="{{ application.pk }}" data-bs-toggle="modal" data-bs-target="#leaveDetailsModal">Details</button> {% if application.status == "PENDING" %}<button class="btn btn-sm btn-outline-danger cancel-leave" data-cancel-url="{% url 'leave_cancel_api' application.pk %}">Cancel</button>{% endif %}</td>
+        </tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">You have not submitted a leave application yet.</p>{% endif %}
+    </div></div>
+</div>
+<div class="modal fade" id="leaveDetailsModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Leave application details</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body" id="leaveDetailsBody">Loading…</div></div></div></div>
+<script>
+(() => {
+    const form = document.getElementById("leaveApplicationForm"), messageBox = document.getElementById("leaveFormMessage");
+    const start = form.querySelector('[name="start_date"]'), end = form.querySelector('[name="end_date"]'), days = document.getElementById("leaveDayCount");
+    function updateDays() {
+        if (!start.value || !end.value) { days.textContent = "Select dates to calculate days"; return; }
+        const count = Math.round((new Date(end.value + "T00:00:00") - new Date(start.value + "T00:00:00")) / 86400000) + 1;
+        days.textContent = count > 0 ? count + " day" + (count === 1 ? "" : "s") : "End date must be on or after start date";
+    }
+    start.addEventListener("change", updateDays); end.addEventListener("change", updateDays);
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const response = await fetch(form.action, {method: "POST", body: new FormData(form)}), data = await response.json();
+        if (!response.ok) {
+            const errors = data.error || Object.entries(data.errors || {}).flatMap(([field, items]) => items.map(item => field + ": " + item.message)).join("<br>");
+            messageBox.innerHTML = '<div class="alert alert-danger">' + (errors || "Could not submit this application.") + '</div>'; return;
+        }
+        messageBox.innerHTML = '<div class="alert alert-success">Application submitted. Reloading your history…</div>'; window.location.reload();
+    });
+    document.querySelectorAll(".view-leave").forEach(button => button.addEventListener("click", async () => {
+        const body = document.getElementById("leaveDetailsBody"); body.textContent = "Loading…";
+        const response = await fetch("/api/student/leave/" + button.dataset.leaveId + "/"), data = await response.json();
+        if (!response.ok) { body.textContent = data.error || "Could not load this application."; return; }
+        const item = data.application, details = document.createElement("div");
+        const paragraphs = [item.leave_type_display + " · " + item.status_display, item.start_date + " to " + item.end_date + " · " + item.total_days + " day(s)", "Reason: " + item.reason, "Reviewer note: " + (item.review_note || "No note added.")];
+        paragraphs.forEach(text => { const p = document.createElement("p"); p.textContent = text; details.appendChild(p); });
+        item.attachments.forEach(file => { const a = document.createElement("a"); a.href = file.url; a.textContent = file.name; details.appendChild(a); details.appendChild(document.createElement("br")); }); body.replaceChildren(details);
+    }));
+    document.querySelectorAll(".cancel-leave").forEach(button => button.addEventListener("click", async () => {
+        if (!confirm("Cancel this pending leave application?")) return;
+        const response = await fetch(button.dataset.cancelUrl, {method: "POST", headers: {"X-CSRFToken": form.querySelector('[name="csrfmiddlewaretoken"]').value}}), data = await response.json();
+        if (!response.ok) { alert(data.error || "Could not cancel the application."); return; } window.location.reload();
+    }));
+})();
+</script>
+{% endblock %}

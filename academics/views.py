@@ -3,10 +3,11 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import models, transaction
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.db import IntegrityError, models, transaction
 from django.db.models import Avg, Count, DecimalField, ExpressionWrapper, F, Max, Min, Q, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.http import FileResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -14,11 +15,209 @@ from django.utils import timezone
 from accounts.models import StudentProfile
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
-from .forms import AttendanceSelectionForm, DoubtInboxFilterForm, DoubtReplyForm, DoubtThreadForm
-from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, Subject, TeachingAssignment, Timetable
+from .forms import AttendanceSelectionForm, DoubtInboxFilterForm, DoubtReplyForm, DoubtThreadForm, LeaveApplicationForm
+from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, LeaveApplication, LeaveAttachment, Subject, TeachingAssignment, Timetable
 
 
 WEEKDAYS = tuple(Timetable.DayOfWeek.choices)
+
+
+def _leave_json(application):
+    return {
+        "id": application.pk,
+        "leave_type": application.leave_type,
+        "leave_type_display": application.get_leave_type_display(),
+        "start_date": application.start_date.isoformat(),
+        "end_date": application.end_date.isoformat(),
+        "total_days": application.total_days,
+        "reason": application.reason,
+        "parent_acknowledgement": application.parent_acknowledgement,
+        "status": application.status,
+        "status_display": application.get_status_display(),
+        "submission_date": application.created_at.isoformat(),
+        "review_note": application.review_note,
+        "reviewed_at": application.reviewed_at.isoformat() if application.reviewed_at else None,
+        "attachments": [
+            {"name": attachment.file.name.rsplit("/", 1)[-1], "url": reverse("leave_attachment_download", args=[attachment.pk])}
+            for attachment in application.attachments.all()
+        ],
+    }
+
+
+def _leave_access(user, application):
+    if user.role == "STUDENT":
+        return application.student.user_id == user.pk
+    if user.role == "PARENT":
+        return application.parent_acknowledgement and application.student.parent_id == getattr(
+            getattr(user, "parent_profile", None), "pk", None
+        )
+    if user.role == "TEACHER":
+        return TeachingAssignment.objects.filter(
+            teacher__user=user, student_class_id=application.student_class_id
+        ).exists()
+    return user.is_staff
+
+
+@login_required
+def student_leave_page(request):
+    if request.user.role != "STUDENT":
+        return redirect("dashboard")
+    applications = LeaveApplication.objects.filter(student=request.user.student_profile).prefetch_related(
+        "attachments"
+    )
+    today = timezone.localdate()
+    approved_days = sum(
+        application.total_days for application in applications.filter(
+            status=LeaveApplication.Status.APPROVED,
+            start_date__year=today.year,
+        )
+    )
+    return render(request, "academics/student_leave.html", {
+        "leave_form": LeaveApplicationForm(),
+        "applications": applications,
+        "approved_days": approved_days,
+        "pending_count": applications.filter(status=LeaveApplication.Status.PENDING).count(),
+        "rejected_count": applications.filter(status=LeaveApplication.Status.REJECTED).count(),
+        "current_year": today.year,
+    })
+
+
+@login_required
+def teacher_leave_page(request):
+    if request.user.role != "TEACHER" and not request.user.is_staff:
+        return redirect("dashboard")
+    applications = LeaveApplication.objects.select_related("student__user", "student_class").filter(
+        student_class__in=Class.objects.filter(teaching_assignments__teacher__user=request.user)
+    )
+    if request.user.is_staff and request.user.role != "TEACHER":
+        applications = LeaveApplication.objects.select_related("student__user", "student_class").all()
+    applications = applications.prefetch_related("attachments")
+    return render(request, "academics/teacher_leave.html", {"applications": applications})
+
+
+@login_required
+def parent_leave_page(request):
+    if request.user.role != "PARENT":
+        return redirect("dashboard")
+    applications = LeaveApplication.objects.filter(
+        student__parent=request.user.parent_profile,
+        parent_acknowledgement=True,
+    ).select_related("student__user", "student_class").prefetch_related("attachments")
+    return render(request, "academics/parent_leave.html", {"applications": applications})
+
+
+@login_required
+def leave_apply_api(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required."}, status=405)
+    if request.user.role != "STUDENT":
+        return JsonResponse({"error": "Only students can apply for leave."}, status=403)
+    student = request.user.student_profile
+    if student.student_class_id is None:
+        return JsonResponse({"error": "Your profile is not assigned to a class."}, status=400)
+    form = LeaveApplicationForm(request.POST, request.FILES)
+    if not form.is_valid():
+        return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
+    values = form.cleaned_data
+    if LeaveApplication.objects.filter(
+        student=student,
+        start_date=values["start_date"],
+        end_date=values["end_date"],
+        status__in=(LeaveApplication.Status.PENDING, LeaveApplication.Status.APPROVED),
+    ).exists():
+        return JsonResponse({"error": "An active leave application already covers these exact dates."}, status=409)
+    try:
+        with transaction.atomic():
+            application = form.save(commit=False)
+            application.student = student
+            application.student_class = student.student_class
+            application.save()
+            for uploaded in values.get("attachments", []):
+                LeaveAttachment.objects.create(application=application, file=uploaded)
+    except IntegrityError:
+        return JsonResponse({"error": "An active leave application already covers these exact dates."}, status=409)
+    return JsonResponse({"application": _leave_json(application)}, status=201)
+
+
+@login_required
+def leave_history_api(request):
+    if request.method != "GET":
+        return JsonResponse({"error": "GET required."}, status=405)
+    if request.user.role != "STUDENT":
+        return JsonResponse({"error": "Student account required."}, status=403)
+    records = LeaveApplication.objects.filter(student=request.user.student_profile).prefetch_related("attachments")
+    status_filter = request.GET.get("status", "").upper()
+    if status_filter:
+        if status_filter not in LeaveApplication.Status.values:
+            return JsonResponse({"error": "Invalid status filter."}, status=400)
+        records = records.filter(status=status_filter)
+    paginator = Paginator(records, 10)
+    try:
+        page = paginator.page(request.GET.get("page", 1))
+    except PageNotAnInteger:
+        return JsonResponse({"error": "Page must be a whole number."}, status=400)
+    except EmptyPage:
+        return JsonResponse({"error": "Requested page is out of range."}, status=404)
+    return JsonResponse({
+        "results": [_leave_json(application) for application in page.object_list],
+        "pagination": {"page": page.number, "pages": paginator.num_pages, "count": paginator.count,
+                       "has_next": page.has_next(), "has_previous": page.has_previous()},
+    })
+
+
+@login_required
+def leave_detail_api(request, pk):
+    if request.method != "GET":
+        return JsonResponse({"error": "GET required."}, status=405)
+    application = get_object_or_404(
+        LeaveApplication.objects.prefetch_related("attachments"), pk=pk
+    )
+    if not _leave_access(request.user, application):
+        return JsonResponse({"error": "You cannot access this leave application."}, status=403)
+    return JsonResponse({"application": _leave_json(application)})
+
+
+@login_required
+def leave_cancel_api(request, pk):
+    if request.method not in ("POST", "DELETE"):
+        return JsonResponse({"error": "POST or DELETE required."}, status=405)
+    if request.user.role != "STUDENT":
+        return JsonResponse({"error": "Only the applicant can cancel leave."}, status=403)
+    application = get_object_or_404(LeaveApplication, pk=pk, student__user=request.user)
+    if application.status != LeaveApplication.Status.PENDING:
+        return JsonResponse({"error": "Only pending applications can be cancelled."}, status=409)
+    application.status = LeaveApplication.Status.CANCELLED
+    application.save(update_fields=["status"])
+    return JsonResponse({"application": _leave_json(application)})
+
+
+@login_required
+def leave_review_api(request, pk):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required."}, status=405)
+    application = get_object_or_404(LeaveApplication, pk=pk)
+    if not _leave_access(request.user, application) or request.user.role not in ("TEACHER",) and not request.user.is_staff:
+        return JsonResponse({"error": "You cannot review this leave application."}, status=403)
+    if application.status != LeaveApplication.Status.PENDING:
+        return JsonResponse({"error": "Only pending applications can be reviewed."}, status=409)
+    status = request.POST.get("status", "").upper()
+    if status not in (LeaveApplication.Status.APPROVED, LeaveApplication.Status.REJECTED):
+        return JsonResponse({"error": "Choose Approved or Rejected."}, status=400)
+    application.status = status
+    application.review_note = (request.POST.get("review_note") or "").strip()[:4000]
+    application.reviewer = request.user
+    application.reviewed_at = timezone.now()
+    application.save(update_fields=["status", "review_note", "reviewer", "reviewed_at"])
+    return JsonResponse({"application": _leave_json(application)})
+
+
+@login_required
+def leave_attachment_download(request, pk):
+    attachment = get_object_or_404(LeaveAttachment.objects.select_related("application"), pk=pk)
+    if not _leave_access(request.user, attachment.application):
+        return HttpResponseForbidden("You cannot access this supporting document.")
+    name = attachment.file.name.rsplit("/", 1)[-1]
+    return FileResponse(attachment.file.open("rb"), as_attachment=True, filename=name)
 
 
 def _timetable_days(entries):

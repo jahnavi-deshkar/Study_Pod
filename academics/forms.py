@@ -1,10 +1,11 @@
 from django import forms
+from django.conf import settings
 from pathlib import PurePath
 from django.utils import timezone
 
 from accounts.models import StudentProfile
 
-from .models import Class, DoubtReply, DoubtThread, Subject, TeachingAssignment
+from .models import Class, DoubtReply, DoubtThread, LeaveApplication, Subject, TeachingAssignment
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -201,4 +202,57 @@ class DoubtInboxFilterForm(forms.Form):
         if cleaned_data.get("date_range") == "CUSTOM" and not (start_date or end_date):
             self.add_error("start_date", "Enter a start date, end date, or both for a custom range.")
         return cleaned_data
+
+
+class LeaveApplicationForm(forms.ModelForm):
+    MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024
+
+    attachments = MultipleFileField(
+        required=False,
+        widget=MultipleFileInput(attrs={
+            "multiple": True,
+            "accept": ".pdf,.png,.jpg,.jpeg",
+            "class": "form-control",
+        }),
+        label="Supporting documents",
+        help_text="PDF, PNG, or JPG. Maximum 5 MB per file.",
+    )
+
+    class Meta:
+        model = LeaveApplication
+        fields = ("leave_type", "start_date", "end_date", "reason", "parent_acknowledgement")
+        widgets = {
+            "leave_type": forms.Select(attrs={"class": "form-select"}),
+            "start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}, format="%Y-%m-%d"),
+            "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}, format="%Y-%m-%d"),
+            "reason": forms.Textarea(attrs={"class": "form-control", "rows": 4, "maxlength": 2000}),
+            "parent_acknowledgement": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["start_date"].input_formats = ["%Y-%m-%d"]
+        self.fields["end_date"].input_formats = ["%Y-%m-%d"]
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get("start_date")
+        end = cleaned.get("end_date")
+        leave_type = cleaned.get("leave_type")
+        allow_retroactive_emergency = getattr(settings, "LEAVE_ALLOW_RETROACTIVE_EMERGENCY", False)
+        if start and end and end < start:
+            self.add_error("end_date", "End date cannot be before the start date.")
+        if start and start < timezone.localdate():
+            if not (allow_retroactive_emergency and leave_type == LeaveApplication.LeaveType.EMERGENCY):
+                self.add_error("start_date", "Past dates are not allowed for leave applications.")
+        return cleaned
+
+    def clean_attachments(self):
+        uploaded = self.cleaned_data.get("attachments", [])
+        for item in uploaded:
+            if PurePath(item.name).suffix.lower() not in {".pdf", ".png", ".jpg", ".jpeg"}:
+                raise forms.ValidationError("Attach only PDF, PNG, or JPG files.")
+            if item.size > self.MAX_ATTACHMENT_SIZE:
+                raise forms.ValidationError("Each supporting file must be 5 MB or smaller.")
+        return uploaded
 

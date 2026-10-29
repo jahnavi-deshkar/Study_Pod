@@ -20,7 +20,7 @@
 
             <div class="card-body p-4">
 
-                <form method="post">
+                <form method="post" enctype="multipart/form-data">
 
                     {% csrf_token %}
 
@@ -87,6 +87,15 @@
                         </div>
 
                     {% elif request.user.role == "STUDENT" %}
+
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ profile_form.profile_picture.id_for_label }}">Profile picture</label>
+                            {% if request.user.student_profile.profile_picture %}
+                                <div class="mb-2"><img src="{{ request.user.student_profile.profile_picture.url }}" alt="Current profile picture" class="rounded-circle" style="width: 88px; height: 88px; object-fit: cover;"></div>
+                            {% endif %}
+                            {{ profile_form.profile_picture }}
+                            {% for error in profile_form.profile_picture.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
 
                         <div class="alert alert-secondary">
 

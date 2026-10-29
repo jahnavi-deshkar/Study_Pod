@@ -177,8 +177,8 @@ class AssessmentFlowTests(TestCase):
         self.assertNotContains(response, "Draft")
 
     def test_teacher_can_publish_assessment_from_preview(self):
-        assessment = self.make_assessment(is_published=False)
-        self.add_question(assessment)
+        assessment = self.make_assessment(is_published=False, total_marks=2)
+        self.add_question(assessment, marks=2)
         self.client.force_login(self.teacher_user)
 
         response = self.client.post(
@@ -189,6 +189,33 @@ class AssessmentFlowTests(TestCase):
         self.assertRedirects(response, reverse("test_preview", args=[assessment.id]))
         assessment.refresh_from_db()
         self.assertTrue(assessment.is_published)
+
+    def test_teacher_cannot_publish_when_question_marks_do_not_match_total(self):
+        assessment = self.make_assessment(is_published=False, total_marks=10)
+        self.add_question(assessment, marks=2)
+        self.client.force_login(self.teacher_user)
+
+        response = self.client.post(
+            reverse("test_preview", args=[assessment.id]),
+            {"action": "publish"},
+            follow=True,
+        )
+
+        assessment.refresh_from_db()
+        self.assertFalse(assessment.is_published)
+        self.assertContains(response, "currently total 2")
+        self.assertContains(response, "disabled")
+
+    def test_question_entry_shows_live_assessment_totals(self):
+        assessment = self.make_assessment(is_published=False, total_marks=5)
+        self.add_question(assessment, marks=2)
+        self.client.force_login(self.teacher_user)
+
+        response = self.client.get(reverse("question_create", args=[assessment.id]))
+
+        self.assertContains(response, "1 saved question")
+        self.assertContains(response, "2 marks assigned")
+        self.assertContains(response, "5 total marks")
 
     def test_short_answer_submission_waits_for_teacher_and_result_updates(self):
         assessment = self.make_assessment(total_marks=5)

@@ -37,14 +37,14 @@ python manage.py createsuperuser
 
 | Role | Username | Password |
 | --- | --- | --- |
-| Teacher | `teacher1` | `password123` |
-| Student | `student1` | `password123` |
-| Student | `student2` | `password123` |
+| Teacher | `Teacher1` | `Teacher@12345` |
+| Student | `Student1` | `Student@12345` |
+| Parent  | `Parent1` | `Parent@12345` |
 
 These predictable credentials are for local development only. Do not expose them or reuse them in a deployed environment. The sample assessment is a draft and has no questions until a teacher adds them.
 
 ## Environment Configuration
-
+testing
 For convenience, local development defaults to `DEBUG=True`, a development-only secret key, and local allowed hosts. Configure these variables explicitly for deployment:
 
 | Variable | Purpose | Production example |
@@ -104,7 +104,23 @@ python manage.py makemigrations --check --dry-run
 - `/login/`, `/dashboard/`, `/profile/`
 - `/academics/teacher/attendance/`, `/academics/student/attendance/`
 - `/academics/discussions/`
+- `/academics/student/leave/` and `/academics/teacher/leaves/`
 - `/academics/student/analytics/`, `/academics/teacher/analytics/`
 - `/exam/tests/` for teacher assessment management
 - `/exam/student/assessments/` for student assessments
 - `/admin/` for Django administration
+
+## Student leave management
+
+Students can submit and track leave applications at `/academics/student/leave/`. Applications can include PDF/PNG/JPG/JPEG support files (maximum 5 MB each) and can be shared as a copy in the linked parent's portal. Teachers review requests at `/academics/teacher/leaves/` for their assigned classes. Past dates are rejected; emergency retroactive leave can be enabled with `LEAVE_ALLOW_RETROACTIVE_EMERGENCY = True` in settings. Exact duplicate active date ranges are blocked.
+
+Session-authenticated API endpoints:
+
+- `POST /api/student/leave/apply/` — multipart form data with `leave_type`, `start_date`, `end_date`, `reason`, optional `parent_acknowledgement=on`, and optional repeated `attachments` files.
+- `GET /api/student/leave/history/?status=PENDING&page=1` — paginated history (10 per page); `status` is optional.
+- `GET /api/student/leave/<id>/` — application details and review note.
+- `POST` or `DELETE /api/student/leave/<id>/cancel/` — cancel a pending application (CSRF protection applies to session requests).
+- `POST /api/teacher/leave/<id>/review/` — teacher review with `status=APPROVED` or `REJECTED` and optional `review_note`.
+- `GET /api/leave/attachments/<id>/` — permission-checked supporting document download.
+
+The parent acknowledgement option displays the application copy in the linked parent's portal; it does not send email or push notifications.

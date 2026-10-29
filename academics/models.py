@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.validators import FileExtensionValidator
+from .storage import PrivateDoubtAttachmentStorage
 
 
 class Class(models.Model):
@@ -283,12 +285,26 @@ class Assessment(models.Model):
 
 
 class DoubtThread(models.Model):
+    class Category(models.TextChoices):
+        SYLLABUS_TOPIC = "SYLLABUS_TOPIC", "Syllabus / Topic"
+        ASSIGNMENT_HOMEWORK = "ASSIGNMENT_HOMEWORK", "Assignment / Homework"
+        NOTICE_ANNOUNCEMENT = "NOTICE_ANNOUNCEMENT", "Notice / Announcement"
+        STUDY_RESOURCE = "STUDY_RESOURCE", "Study Resource"
+
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
         RESOLVED = "RESOLVED", "Resolved"
 
     title = models.CharField(max_length=200)
     content = models.TextField()
+    category = models.CharField(
+        max_length=24,
+        choices=Category.choices,
+        default=Category.SYLLABUS_TOPIC,
+    )
+    is_public = models.BooleanField(default=False)
+    document_link = models.URLField(blank=True)
     student = models.ForeignKey(
         "accounts.StudentProfile",
         on_delete=models.CASCADE,
@@ -305,7 +321,7 @@ class DoubtThread(models.Model):
         related_name="doubt_threads",
     )
     status = models.CharField(
-        max_length=10,
+        max_length=11,
         choices=Status.choices,
         default=Status.OPEN,
     )
@@ -316,6 +332,34 @@ class DoubtThread(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class DoubtAttachment(models.Model):
+    thread = models.ForeignKey(
+        DoubtThread,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    reply = models.ForeignKey(
+        "DoubtReply",
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        null=True,
+        blank=True,
+    )
+    file = models.FileField(
+        upload_to="doubt_attachments/%Y/%m/",
+        storage=PrivateDoubtAttachmentStorage(),
+        blank=True,
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "pdf"])],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")
+
+    def __str__(self):
+        return self.file.name.rsplit("/", 1)[-1]
 
 
 class DoubtReply(models.Model):
@@ -338,3 +382,72 @@ class DoubtReply(models.Model):
 
     def __str__(self):
         return f"Reply by {self.user} on {self.thread}"
+
+
+class LeaveApplication(models.Model):
+    class LeaveType(models.TextChoices):
+        SICK = "SICK", "Sick Leave"
+        PERSONAL = "PERSONAL", "Casual / Personal Leave"
+        EMERGENCY = "EMERGENCY", "Emergency"
+        OFFICIAL = "OFFICIAL", "Official / Extracurricular Event"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    student = models.ForeignKey(
+        "accounts.StudentProfile", on_delete=models.CASCADE, related_name="leave_applications"
+    )
+    student_class = models.ForeignKey(
+        Class, on_delete=models.SET_NULL, null=True, related_name="leave_applications"
+    )
+    leave_type = models.CharField(max_length=12, choices=LeaveType.choices)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField()
+    parent_acknowledgement = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    reviewer = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_leave_applications"
+    )
+    review_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("student", "start_date", "end_date"),
+                condition=models.Q(status__in=("PENDING", "APPROVED")),
+                name="unique_active_student_leave_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="leave_end_on_or_after_start",
+            ),
+        ]
+
+    @property
+    def total_days(self):
+        return (self.end_date - self.start_date).days + 1
+
+    def __str__(self):
+        return f"{self.student} — {self.start_date} to {self.end_date}"
+
+
+class LeaveAttachment(models.Model):
+    application = models.ForeignKey(
+        LeaveApplication, on_delete=models.CASCADE, related_name="attachments"
+    )
+    file = models.FileField(
+        upload_to="leave_attachments/%Y/%m/",
+        storage=PrivateDoubtAttachmentStorage(),
+        validators=[FileExtensionValidator(["pdf", "png", "jpg", "jpeg"])],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")

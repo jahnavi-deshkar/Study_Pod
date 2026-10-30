@@ -126,4 +126,3 @@ Session-authenticated API endpoints:
 The parent acknowledgement option displays the application copy in the linked parent's portal; it does not send email or push notifications.
 
 
-i am anoushka

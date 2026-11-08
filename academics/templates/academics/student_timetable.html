@@ -1,0 +1,30 @@
+{% extends "accounts/base.html" %}
+{% block title %}My Timetable | StudyPod{% endblock %}
+{% block content %}
+<div class="container mt-3">
+    <div class="mb-4">
+        <h2>{% if is_parent_view %}Student Timetable{% else %}My Timetable{% endif %}</h2>
+        {% if is_parent_view and children|length > 1 %}
+        <form method="get" class="mb-3"><label for="studentChoice" class="form-label">Student</label><div class="d-flex gap-2"><select class="form-select" id="studentChoice" name="student_id">{% for child in children %}<option value="{{ child.pk }}" {% if selected_child.pk == child.pk %}selected{% endif %}>{{ child.user.get_full_name|default:child.user.username }}</option>{% endfor %}</select><button class="btn btn-outline-primary" type="submit">View</button></div></form>
+        {% endif %}
+        <p class="text-muted">{% if student_class %}Weekly schedule for {% if selected_child %}{{ selected_child.user.get_full_name|default:selected_child.user.username }} · {% endif %}Class {{ student_class }}.{% else %}The student is not assigned to a class yet.{% endif %}</p>
+    </div>
+    <div class="row g-3">
+        {% for day in days %}
+        <div class="col-12 col-md-6 col-xl-4">
+            <section class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">{{ day.label }}</div>
+                <div class="card-body">
+                    {% for entry in day.entries %}
+                    <article class="border rounded p-3 mb-2">
+                        <div class="fw-semibold">{{ entry.start_time|time:"H:i" }}–{{ entry.end_time|time:"H:i" }} · {{ entry.subject.name }}</div>
+                        <div>{% if entry.teacher %}{{ entry.teacher.user.get_full_name|default:entry.teacher.user.username }}{% else %}Teacher not listed{% endif %}{% if entry.room_number %} · Room {{ entry.room_number }}{% endif %}</div>
+                    </article>
+                    {% empty %}<p class="text-muted mb-0">No classes scheduled.</p>{% endfor %}
+                </div>
+            </section>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

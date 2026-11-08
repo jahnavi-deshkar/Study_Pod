@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+
+# Local database and environments
+db.sqlite3
+venv/
+env/
+.venv/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Local vector database
+chroma_db/
+
+# macOS metadata
+.DS_Store

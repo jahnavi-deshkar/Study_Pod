@@ -1,0 +1,193 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <h2 class="mb-4">Attendance</h2>
+
+    <!-- Class and Date Selection -->
+    <form method="post">
+
+        {% csrf_token %}
+
+        <div class="row mb-4">
+
+            <!-- Class -->
+            <div class="col-md-6">
+
+                <label class="form-label">
+                    Class
+                </label>
+
+                <select
+                    name="student_class"
+                    class="form-select"
+                    required
+                >
+
+                    <option value="">
+                        Select Class
+                    </option>
+
+                    {% for class in classes %}
+
+                        <option
+                            value="{{ class.id }}"
+                            {% if selected_class and selected_class.id == class.id %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ class.name }} - {{ class.section }}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <!-- Date -->
+            <div class="col-md-6">
+
+                <label class="form-label">
+                    Date
+                </label>
+
+                <input
+                    type="date"
+                    name="date"
+                    class="form-control"
+                    value="{{ selected_date }}"
+                    required
+                >
+
+            </div>
+
+        </div>
+
+
+        <!-- Load Students Button -->
+
+        <button
+            type="submit"
+            name="action"
+            value="load"
+            class="btn btn-secondary mb-4"
+        >
+            Load Students
+        </button>
+
+
+        {% if students %}
+
+            <hr>
+
+            <h4 class="mb-3">
+                Students
+            </h4>
+
+
+            <!-- Student List -->
+
+            {% for student in students %}
+
+                <div class="card mb-3 shadow-sm">
+
+                    <div class="card-body">
+
+                        <div class="row align-items-center">
+
+                            <!-- Student Information -->
+
+                            <div class="col-md-6">
+
+                                <strong>
+                                    {{ student.user.get_full_name|default:student.user.username }}
+                                </strong>
+
+                                <br>
+
+                                <small class="text-muted">
+                                    Roll No: {{ student.roll_number }}
+                                </small>
+
+                            </div>
+
+
+                            <!-- Attendance Options -->
+
+                            <div class="col-md-6">
+
+                                <!-- Present -->
+
+                                <div class="form-check form-check-inline">
+
+                                    <input
+                                        class="form-check-input"
+                                        type="radio"
+                                        name="student_{{ student.id }}"
+                                        value="present"
+                                        {% if student.attendance_status == "present" %}
+                                            checked
+                                        {% endif %}
+                                        required
+                                    >
+
+                                    <label class="form-check-label">
+                                        Present
+                                    </label>
+
+                                </div>
+
+
+                                <!-- Absent -->
+
+                                <div class="form-check form-check-inline">
+
+                                    <input
+                                        class="form-check-input"
+                                        type="radio"
+                                        name="student_{{ student.id }}"
+                                        value="absent"
+                                        {% if student.attendance_status == "absent" %}
+                                            checked
+                                        {% endif %}
+                                    >
+
+                                    <label class="form-check-label">
+                                        Absent
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+
+            <!-- Save Attendance Button -->
+
+            <button
+                type="submit"
+                name="action"
+                value="save"
+                class="btn btn-primary"
+            >
+                Save Attendance
+            </button>
+
+        {% endif %}
+
+    </form>
+
+</div>
+
+{% endblock %}

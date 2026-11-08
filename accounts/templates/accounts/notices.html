@@ -1,0 +1,122 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Notices | StudyPod{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <div>
+        <h2 class="fw-bold">Notices</h2>
+        <p class="text-muted mb-0">
+            Important announcements and updates.
+        </p>
+    </div>
+
+    {% if request.user.role == "TEACHER" %}
+        <a
+            href="{% url 'create_notice' %}"
+            class="btn btn-primary"
+        >
+            + Create Notice
+        </a>
+    {% endif %}
+
+</div>
+
+
+{% if messages %}
+
+    {% for message in messages %}
+
+        <div class="alert alert-success">
+            {{ message }}
+        </div>
+
+    {% endfor %}
+
+{% endif %}
+
+
+{% if notices %}
+
+    <div class="row g-4">
+
+        {% for notice in notices %}
+
+            <div class="col-12">
+
+                <div class="card shadow-sm">
+
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between">
+
+                            <div>
+
+                                <h5 class="card-title fw-bold">
+                                    {{ notice.title }}
+                                </h5>
+
+                                <p class="text-muted mb-2">
+                                    Class:
+                                    <strong>
+                                        {{ notice.student_class }}
+                                    </strong>
+                                </p>
+
+                            </div>
+
+                            <small class="text-muted">
+                                {{ notice.created_at|date:"d M Y, h:i A" }}
+                            </small>
+
+                        </div>
+
+
+                        <p class="card-text mt-3">
+                            {{ notice.content|linebreaksbr }}
+                        </p>
+
+
+                        {% if notice.teacher %}
+
+                            <p class="text-muted mb-2">
+                                Posted by:
+                                {{ notice.teacher }}
+                            </p>
+
+                        {% endif %}
+
+
+                        {% if notice.attachment %}
+
+                            <a
+                                href="{{ notice.attachment.url }}"
+                                target="_blank"
+                                class="btn btn-outline-primary btn-sm"
+                            >
+                                📎 View Attachment
+                            </a>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+{% else %}
+
+    <div class="alert alert-info">
+        No notices available.
+    </div>
+
+{% endif %}
+
+{% endblock %}

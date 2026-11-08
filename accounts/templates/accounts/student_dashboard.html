@@ -1,0 +1,257 @@
+{% extends "accounts/base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- Page Heading -->
+
+    <div class="mb-4">
+        <h2>Student Dashboard</h2>
+
+        <p class="text-muted">
+            Welcome, {{ request.user.get_full_name|default:request.user.username }}!
+        </p>
+    </div>
+
+
+    <!-- Dashboard Cards -->
+
+    <div class="row">
+
+
+        <!-- Notices -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Notices
+                    </h5>
+
+                    <p class="card-text">
+                        View important announcements and notices
+                        from your teachers.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'notices' %}"
+                            class="btn btn-primary"
+                        >
+                            View Notices
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Leave management -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+                <h5 class="card-title">Leave Applications</h5>
+                <p class="card-text">Apply for leave and track your application history and decisions.</p>
+                <div class="mt-auto"><a href="{% url 'student_leave_page' %}" class="btn btn-primary">Manage Leave</a></div>
+            </div></div>
+        </div>
+
+        <!-- Attendance -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Attendance
+                    </h5>
+
+                    <p class="card-text">
+                        View your attendance records,
+                        present days, and attendance percentage.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'academics_student_attendance' %}"
+                            class="btn btn-primary"
+                        >
+                            View Attendance
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Profile -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        My Profile
+                    </h5>
+
+                    <p class="card-text">
+                        View and manage your personal profile
+                        information.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'profile' %}"
+                            class="btn btn-primary"
+                        >
+                            View Profile
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Study Resources -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Study Resources
+                    </h5>
+
+                    <p class="card-text">
+                        Access notes, documents, presentations,
+                        and other learning materials.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'resource_list' %}"
+                            class="btn btn-primary"
+                        >
+                            View Resources
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Tests & Assignments -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Tests & Assignments
+                    </h5>
+
+                    <p class="card-text">
+                        View upcoming tests, assignments,
+                        deadlines, and results.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a
+                            href="{% url 'student_assessments' %}"
+                            class="btn btn-primary"
+                        >
+                            View Tests
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Doubts & Discussions -->
+
+        <div class="col-md-4 mb-4">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body d-flex flex-column">
+
+                    <h5 class="card-title">
+                        Doubts & Discussions
+                    </h5>
+
+                    <p class="card-text">
+                        Ask questions, discuss academic topics,
+                        and get help from teachers.
+                    </p>
+
+                    <div class="mt-auto">
+
+                        <a href="{% url 'doubt_threads' %}" class="btn btn-primary">View Discussions</a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+                <h5 class="card-title">Student Progress</h5>
+                <p class="card-text">Review your assessment results and subject progress.</p>
+                <div class="mt-auto"><a href="{% url 'student_analytics' %}" class="btn btn-primary">View Analytics</a></div>
+            </div></div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+                <h5 class="card-title">Timetable</h5>
+                <p class="card-text">View your weekly class schedule.</p>
+                <div class="mt-auto"><a href="{% url 'student_timetable' %}" class="btn btn-primary">View Timetable</a></div>
+            </div></div>
+        </div>
+
+
+    </div>
+
+</div>
+
+{% endblock %}

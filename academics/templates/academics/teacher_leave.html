@@ -1,0 +1,20 @@
+{% extends "accounts/base.html" %}
+{% block title %}Leave Review | StudyPod{% endblock %}
+{% block content %}
+<div class="container mt-4"><h1 class="h3">Student Leave Applications</h1><p class="text-muted">Review requests for your assigned classes.</p>
+<div id="reviewMessage"></div>
+<div class="card"><div class="card-body"><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Student</th><th>Dates</th><th>Type</th><th>Reason</th><th>Documents</th><th>Status / Review</th></tr></thead><tbody>
+{% for application in applications %}<tr><td>{{ application.student.user.get_full_name|default:application.student.user.username }}<div class="small text-muted">{{ application.student_class }}</div></td><td>{{ application.start_date|date:"d M Y" }} – {{ application.end_date|date:"d M Y" }}<div class="small text-muted">{{ application.total_days }} day{{ application.total_days|pluralize }}</div></td><td>{{ application.get_leave_type_display }}</td><td>{{ application.reason }}</td><td>{% for attachment in application.attachments.all %}<a href="{% url 'leave_attachment_download' attachment.pk %}">{{ attachment.file.name|cut:"leave_attachments/" }}</a><br>{% empty %}—{% endfor %}</td><td>
+{% if application.status == "PENDING" %}<form class="leave-review-form" method="post" action="{% url 'leave_review_api' application.pk %}">{% csrf_token %}<textarea class="form-control form-control-sm mb-2" name="review_note" rows="2" placeholder="Instructor note (optional)"></textarea><div class="d-flex gap-2"><button class="btn btn-sm btn-success" name="status" value="APPROVED">Approve</button><button class="btn btn-sm btn-danger" name="status" value="REJECTED">Reject</button></div></form>{% else %}<span class="badge {% if application.status == "APPROVED" %}text-bg-success{% elif application.status == "REJECTED" %}text-bg-danger{% else %}text-bg-secondary{% endif %}">{{ application.get_status_display }}</span><div class="small mt-1">{{ application.review_note|default:"No instructor note." }}</div>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="text-center text-muted">No leave applications found.</td></tr>{% endfor %}</tbody></table></div></div></div></div>
+<script>
+document.querySelectorAll(".leave-review-form").forEach(form => form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = event.submitter, data = new FormData(form); data.set("status", button.value);
+    const response = await fetch(form.action, {method: "POST", body: data}), result = await response.json();
+    const box = document.getElementById("reviewMessage");
+    if (!response.ok) { box.textContent = result.error || "Could not save the review."; box.className = "alert alert-danger"; return; }
+    window.location.reload();
+}));
+</script>
+{% endblock %}

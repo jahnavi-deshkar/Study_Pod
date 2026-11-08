@@ -1,0 +1,91 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Class Analytics | StudyPod{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1 class="h3 mb-1">Assessment Performance Analytics</h1>
+    <p class="text-muted mb-0">Review class outcomes and identify topics that may need another look.</p>
+</div>
+
+<form method="get" class="card card-body shadow-sm mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label for="classSelect" class="form-label">Assigned Class</label>
+            <select class="form-select" id="classSelect" name="student_class" onchange="this.form.submit()">
+                {% for class in assigned_classes %}<option value="{{ class.pk }}" {% if selected_class.pk == class.pk %}selected{% endif %}>{{ class }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="assessmentSelect" class="form-label">Assessment</label>
+            <select class="form-select" id="assessmentSelect" name="assessment">
+                <option value="">Select an assessment</option>
+                {% for assessment in assessments %}<option value="{{ assessment.pk }}" {% if selected_assessment.pk == assessment.pk %}selected{% endif %}>{{ assessment.title }} · {{ assessment.subject.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="threshold" class="form-label">Attention threshold (%)</label>
+            <input class="form-control" id="threshold" name="threshold" type="number" min="0" max="100" step="1" value="{{ threshold_value }}">
+        </div>
+        <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">View Analytics</button></div>
+    </div>
+    {% if not assigned_classes %}<div class="text-muted mt-3">No classes are assigned to your teacher profile.</div>{% elif selected_class and not assessments %}<div class="text-muted mt-3">There are no assessments for this assigned class yet.</div>{% endif %}
+</form>
+
+{% if selected_assessment %}
+<div class="d-flex flex-wrap justify-content-between align-items-baseline mb-3">
+    <h2 class="h5 mb-0">{{ selected_assessment.title }}</h2>
+    <span class="text-muted">{{ selected_assessment.subject.name }} · {{ selected_class }}</span>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Class Average</div><div class="display-6">{{ average_percentage|floatformat:1 }}%</div></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Highest Score</div><div class="display-6">{% if highest_score != None %}{{ highest_score|floatformat:2 }}{% else %}—{% endif %}<span class="fs-5 text-muted"> / {{ selected_assessment.total_marks }}</span></div></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Lowest Score</div><div class="display-6">{% if lowest_score != None %}{{ lowest_score|floatformat:2 }}{% else %}—{% endif %}<span class="fs-5 text-muted"> / {{ selected_assessment.total_marks }}</span></div></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100 shadow-sm"><div class="card-body"><div class="text-muted small">Submissions</div><div class="display-6">{{ submissions }} <span class="fs-5 text-muted">/ {{ enrolled_count }}</span></div><div class="small text-muted">submitted / enrolled</div></div></div></div>
+</div>
+
+<div class="row g-4">
+    <section class="col-xl-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Question Item Analysis</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>Question</th><th>Correct</th><th>Correct %</th><th>Review</th></tr></thead>
+                        <tbody>
+                            {% for row in item_analysis %}
+                            <tr class="{% if row.high_error %}table-warning{% endif %}">
+                                <td><span class="text-muted">Q{{ row.question.order }}.</span> {{ row.question.question_text|truncatewords:16 }}</td>
+                                <td>{{ row.correct_count }} / {{ submissions }}</td>
+                                <td>{{ row.correct_percentage|floatformat:1 }}%</td>
+                                <td>{% if row.high_error %}<span class="badge text-bg-warning">High error</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                            </tr>
+                            {% empty %}<tr><td colspan="4" class="text-center text-muted py-4">This assessment has no questions.</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small text-muted mt-2 mb-0">A correct response earns full marks. High error means fewer than 40% of submitted students answered correctly.</p>
+            </div>
+        </div>
+    </section>
+    <section class="col-xl-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-1">Students Needing Attention</h2>
+                <p class="small text-muted mb-3">Below {{ threshold|floatformat:0 }}% for this assessment.</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Student</th><th>Score</th><th>Result</th></tr></thead>
+                        <tbody>
+                            {% for attempt in needs_attention %}
+                            <tr><td>{{ attempt.student.user.get_full_name|default:attempt.student.user.username }}</td><td>{{ attempt.analytics_score|floatformat:2 }} / {{ selected_assessment.total_marks }}</td><td>{{ attempt.analytics_percentage|floatformat:1 }}%</td></tr>
+                            {% empty %}<tr><td colspan="3" class="text-center text-muted py-4">No submitted results are below this threshold.</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endif %}
+{% endblock %}

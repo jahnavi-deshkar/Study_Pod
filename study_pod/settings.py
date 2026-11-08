@@ -14,9 +14,11 @@ from pathlib import Path
 import os
 
 from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -60,7 +62,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'accounts',
     'academics',
-    'exam_engine'
+    'exam_engine',
+    'ai_suggestions.apps.AiSuggestionsConfig',
 ]
 
 MIDDLEWARE = [
@@ -165,3 +168,7 @@ ASSESSMENT_MARKS_STRICT = True
 # Retroactive requests are disabled unless the leave policy explicitly permits
 # emergency leave after its start date.
 LEAVE_ALLOW_RETROACTIVE_EMERGENCY = False
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+

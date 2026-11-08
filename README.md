@@ -126,3 +126,14 @@ Session-authenticated API endpoints:
 The parent acknowledgement option displays the application copy in the linked parent's portal; it does not send email or push notifications.
 
 
+
+## AI suggestions and local RAG
+
+The AI module indexes teacher PDF and TXT resources into a local ChromaDB store using Sentence Transformers, then uses Groq with Qwen for teacher question suggestions and student study recommendations. Resource indexing runs after a resource save; it currently runs synchronously in the web process after the database commit.
+
+Install project dependencies with `python -m pip install -r requirements.txt`. Add `GROQ_API_KEY` and optionally `GROQ_MODEL=qwen/qwen3.8-27b` to the local `.env` file beside `manage.py`. The embedding model is downloaded on first use if it is not already cached. Chroma data is stored in `chroma_db/`.
+
+AI endpoints:
+
+- `POST /api/ai/teacher/questions/`
+- `POST /api/ai/student/recommendations/`

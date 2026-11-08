@@ -93,6 +93,30 @@
             box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .12);
         }
 
+        .related-question-panel {
+            border: 1px solid #dbe3ee;
+            border-radius: .75rem;
+            box-shadow: 0 .5rem 1.25rem rgba(20, 40, 70, .12);
+            margin-top: .5rem;
+            overflow: hidden;
+        }
+
+        .related-question-option {
+            background: #fff;
+            border: 0;
+            border-top: 1px solid #edf1f6;
+            color: #243247;
+            display: block;
+            padding: .7rem .9rem;
+            text-align: left;
+            width: 100%;
+        }
+
+        .related-question-option:hover,
+        .related-question-option:focus {
+            background: #f2f6fc;
+        }
+
     </style>
 
 </head>
@@ -125,8 +149,13 @@
     <div class="card card-body assessment-mark-summary mb-4" aria-live="polite">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <strong>Assessment marks</strong>
-            <span><span id="questionCountSummary">{{ existing_question_count }} saved question{{ existing_question_count|pluralize }}</span> ? Allocated: <strong><span id="marksSummary">{{ existing_question_marks }}</span> / {{ assessment.total_marks }} Marks</strong></span>
+            <span>
+                <span id="questionCountSummary">{{ existing_question_count }} saved question{{ existing_question_count|pluralize }}</span>
+                <span aria-hidden="true">&middot;</span>
+                Allocated: <strong><span id="marksSummary">{{ existing_question_marks }}</span> / {{ assessment.total_marks }} Marks</strong>
+            </span>
         </div>
+        <div id="marksTextSummary" class="small text-muted mt-2">{{ existing_question_marks }} marks assigned; {{ assessment.total_marks }} total marks.</div>
         <div id="markMismatchWarning" class="alert alert-warning mt-3 mb-0 {% if existing_question_marks == assessment.total_marks %}d-none{% endif %}" role="alert"></div>
         <div id="markMatchMessage" class="text-success fw-semibold mt-2 {% if existing_question_marks != assessment.total_marks %}d-none{% endif %}" role="status">Question marks match the configured test total.</div>
         <div id="pendingMarksSummary" class="small text-muted mt-2"></div>
@@ -192,11 +221,24 @@
 
                 <textarea
                     name="question_text"
+                    id="questionText"
                     class="form-control"
                     rows="4"
                     placeholder="Enter your question here..."
+                    data-assessment-id="{{ assessment.pk }}"
+                    data-suggestion-url="{% url 'suggest_related_questions' %}"
                     required
                 ></textarea>
+                <div
+                    id="relatedQuestionPanel"
+                    class="related-question-panel d-none"
+                    role="region"
+                    aria-label="Related question suggestions"
+                    aria-live="polite"
+                >
+                    <div id="relatedQuestionStatus" class="small text-muted px-3 py-2"></div>
+                    <div id="relatedQuestionList"></div>
+                </div>
 
             </div>
 
@@ -1010,6 +1052,7 @@
     const questionTextInput = document.querySelector('[name="question_text"]');
     const questionCountSummary = document.getElementById("questionCountSummary");
     const marksSummary = document.getElementById("marksSummary");
+    const marksTextSummary = document.getElementById("marksTextSummary");
     const pendingMarksSummary = document.getElementById("pendingMarksSummary");
     const mismatchWarning = document.getElementById("markMismatchWarning");
     const matchMessage = document.getElementById("markMatchMessage");
@@ -1031,6 +1074,7 @@
 
         questionCountSummary.textContent = `${projectedCount} question${projectedCount === 1 ? "" : "s"}${hasPendingQuestion ? " after saving" : " saved"}`;
         marksSummary.textContent = projectedMarks;
+        marksTextSummary.textContent = `${projectedMarks} marks assigned; ${configuredTotalMarks} total marks.`;
         matchMessage.classList.toggle("d-none", delta !== 0);
         mismatchWarning.classList.toggle("d-none", delta === 0);
         mismatchWarning.classList.toggle("alert-warning", delta > 0);
@@ -1042,7 +1086,7 @@
         }
         pendingMarksSummary.textContent = hasPendingQuestion
             ? `Preview includes the new question at ${hasValidNewMarks ? rawMarks : 0} marks; saved-question mark edits are included.`
-            : "Change a saved question?s marks or enter a new question to preview the updated allocation.";
+            : "Change a saved question's marks or enter a new question to preview the updated allocation.";
     }
 
     marksInput.addEventListener("input", () => {
@@ -1052,6 +1096,95 @@
     questionTextInput.addEventListener("input", updateAssessmentTotals);
     savedMarkInputs.forEach(input => input.addEventListener("input", updateAssessmentTotals));
     updateAssessmentTotals();
+</script>
+
+<script>
+    const questionSuggestionPanel = document.getElementById("relatedQuestionPanel");
+    const questionSuggestionStatus = document.getElementById("relatedQuestionStatus");
+    const questionSuggestionList = document.getElementById("relatedQuestionList");
+
+    let questionSuggestionTimer;
+    let questionSuggestionController;
+    let fillingQuestionSuggestion = false;
+
+    questionTextInput.addEventListener("input", () => {
+        if (fillingQuestionSuggestion) return;
+
+        clearTimeout(questionSuggestionTimer);
+        questionSuggestionController?.abort();
+
+        const query = questionTextInput.value.trim();
+        if (query.length < 8) {
+            questionSuggestionPanel.classList.add("d-none");
+            questionSuggestionList.replaceChildren();
+            questionSuggestionStatus.textContent = "";
+            return;
+        }
+
+        questionSuggestionTimer = setTimeout(async () => {
+            questionSuggestionPanel.classList.remove("d-none");
+            questionSuggestionList.replaceChildren();
+            questionSuggestionStatus.textContent = "Finding related questions…";
+            questionSuggestionController = new AbortController();
+
+            const url = new URL(
+                questionTextInput.dataset.suggestionUrl,
+                window.location.origin
+            );
+            url.searchParams.set("q", query);
+            url.searchParams.set(
+                "assessment_id",
+                questionTextInput.dataset.assessmentId
+            );
+
+            try {
+                const response = await fetch(url, {
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json" },
+                    signal: questionSuggestionController.signal,
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error("Suggestion request failed.");
+                }
+
+                const suggestions = Array.isArray(data.questions)
+                    ? data.questions
+                    : [];
+
+                if (!suggestions.length) {
+                    questionSuggestionStatus.textContent = "No suggestions available yet.";
+                    return;
+                }
+
+                questionSuggestionStatus.textContent = "Related questions";
+                for (const suggestion of suggestions) {
+                    if (typeof suggestion !== "string") continue;
+
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "related-question-option";
+                    button.textContent = suggestion;
+                    button.addEventListener("click", () => {
+                        fillingQuestionSuggestion = true;
+                        questionTextInput.value = suggestion;
+                        questionTextInput.dispatchEvent(
+                            new Event("input", { bubbles: true })
+                        );
+                        questionTextInput.focus();
+                        questionSuggestionPanel.classList.add("d-none");
+                        fillingQuestionSuggestion = false;
+                    });
+                    questionSuggestionList.appendChild(button);
+                }
+            } catch (error) {
+                if (error.name === "AbortError") return;
+                questionSuggestionStatus.textContent =
+                    "Suggestions are temporarily unavailable.";
+            }
+        }, 300);
+    });
 </script>
 
 </body>

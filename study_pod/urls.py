@@ -26,6 +26,7 @@ urlpatterns = [
     path("", include("accounts.urls")),
     path("academics/", include("academics.urls")),
     path("exam/", include("exam_engine.urls")),
+    path("api/ai/", include("ai_suggestions.urls")),
     path("api/student/leave/apply/", academic_views.leave_apply_api, name="leave_apply_api"),
     path("api/student/leave/history/", academic_views.leave_history_api, name="leave_history_api"),
     path("api/student/leave/<int:pk>/", academic_views.leave_detail_api, name="leave_detail_api"),
@@ -40,4 +41,5 @@ if settings.DEBUG:
         settings.MEDIA_URL,
         document_root=settings.MEDIA_ROOT
     )
+
 

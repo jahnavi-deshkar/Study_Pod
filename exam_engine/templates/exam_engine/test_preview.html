@@ -81,6 +81,15 @@
 
     </div>
 
+    {% if messages %}
+        <div class="mb-3" aria-live="polite">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }}" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
 
     <!-- Assessment summary -->
     <div class="summary-card">

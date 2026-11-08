@@ -2,7 +2,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.http import HttpResponseForbidden
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
+from django.views.decorators.http import require_POST
 
 from .forms import (
     NoticeForm,
@@ -432,6 +433,27 @@ def resource_list(request):
             "-created_at"
         )
 
+        # ChromaDB status is read only for the teacher's own resource library.
+        # A failure to open the local index should not make the page unavailable.
+        from ai_suggestions.services.vector_store import StudyPodVectorStore
+
+        try:
+            vector_store = StudyPodVectorStore()
+        except Exception:
+            vector_store = None
+
+        for resource in resources:
+            if vector_store is None:
+                resource.indexing_status = "unknown"
+                continue
+            try:
+                resource.indexing_status = (
+                    "indexed" if vector_store.is_resource_indexed(resource.pk)
+                    else "not_indexed"
+                )
+            except Exception:
+                resource.indexing_status = "unknown"
+
     elif user.role == "STUDENT":
 
         student = user.student_profile
@@ -469,6 +491,105 @@ def resource_list(request):
             "resources": resources,
         }
     )
+
+
+@login_required
+def teacher_resource_detail(request, resource_id):
+    if request.user.role != "TEACHER":
+        return HttpResponseForbidden("Teacher access is required.")
+
+    teacher = getattr(request.user, "teacher_profile", None)
+    if teacher is None:
+        return HttpResponseForbidden("Teacher profile was not found.")
+
+    resource = get_object_or_404(
+        Resource.objects.select_related("student_class", "subject", "teacher"),
+        pk=resource_id,
+        teacher=teacher,
+    )
+
+    try:
+        from ai_suggestions.services.vector_store import StudyPodVectorStore
+
+        indexed = StudyPodVectorStore().is_resource_indexed(resource.pk)
+        indexing_status = "indexed" if indexed else "not_indexed"
+    except Exception:
+        indexing_status = "unknown"
+
+    return render(
+        request,
+        "accounts/resource_detail.html",
+        {"resource": resource, "indexing_status": indexing_status},
+    )
+
+
+@login_required
+@require_POST
+def teacher_resource_reindex(request, resource_id):
+    if request.user.role != "TEACHER":
+        return HttpResponseForbidden("Teacher access is required.")
+
+    teacher = getattr(request.user, "teacher_profile", None)
+    if teacher is None:
+        return HttpResponseForbidden("Teacher profile was not found.")
+
+    resource = get_object_or_404(
+        Resource.objects.select_related("student_class", "subject"),
+        pk=resource_id,
+        teacher=teacher,
+    )
+
+    try:
+        if not resource.file:
+            raise ValueError("This resource has no uploaded file.")
+
+        from ai_suggestions.services.vector_store import StudyPodVectorStore
+
+        chunks = StudyPodVectorStore().ingest_resource(
+            resource_id=resource.pk,
+            file_path=resource.file.path,
+            metadata={
+                "class_id": resource.student_class_id,
+                "subject": resource.subject.name,
+                "subject_id": resource.subject_id,
+                "teacher_id": teacher.pk,
+                "title": resource.title,
+            },
+        )
+        messages.success(request, f"Resource re-indexed successfully ({chunks} chunks).")
+    except Exception:
+        messages.error(request, "Could not re-index this resource. Check the file and AI index configuration.")
+
+    return redirect("teacher_resource_detail", resource_id=resource.pk)
+
+
+@login_required
+@require_POST
+def teacher_resource_delete(request, resource_id):
+    if request.user.role != "TEACHER":
+        return HttpResponseForbidden("Teacher access is required.")
+
+    teacher = getattr(request.user, "teacher_profile", None)
+    if teacher is None:
+        return HttpResponseForbidden("Teacher profile was not found.")
+
+    resource = get_object_or_404(Resource, pk=resource_id, teacher=teacher)
+    resource_id = resource.pk
+
+    try:
+        from ai_suggestions.services.vector_store import StudyPodVectorStore
+
+        StudyPodVectorStore().delete_resource(resource_id)
+    except Exception:
+        # Continue deletion if the local vector index is unavailable.
+        pass
+
+    if resource.file:
+        resource.file.delete(save=False)
+    resource.delete()
+    messages.success(request, "Resource deleted.")
+    return redirect("resource_list")
+
 
 @login_required
 def create_assessment(request):

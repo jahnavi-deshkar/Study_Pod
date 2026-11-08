@@ -712,6 +712,7 @@ def doubt_thread_detail(request, pk):
     })
 
 
+
 @login_required
 def doubt_attachment_download(request, pk):
     attachment = get_object_or_404(

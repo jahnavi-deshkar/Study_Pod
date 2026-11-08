@@ -44,6 +44,21 @@ urlpatterns = [
         views.resource_list,
         name="resource_list"
     ),
+    path(
+        "resources/<int:resource_id>/",
+        views.teacher_resource_detail,
+        name="teacher_resource_detail",
+    ),
+    path(
+        "resources/<int:resource_id>/reindex/",
+        views.teacher_resource_reindex,
+        name="teacher_resource_reindex",
+    ),
+    path(
+        "resources/<int:resource_id>/delete/",
+        views.teacher_resource_delete,
+        name="teacher_resource_delete",
+    ),
 
     path(
         "assessments/create/",

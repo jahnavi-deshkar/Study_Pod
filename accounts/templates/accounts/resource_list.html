@@ -53,12 +53,12 @@
                             <th>Subject</th>
                             <th>Class</th>
                             <th>Uploaded</th>
-                            <th>AI Index</th>
+                            <th>AI search</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for resource in resources %}
+                        {% for resource in past_uploads %}
                             <tr>
                                 <td>
                                     <strong>{{ resource.title }}</strong>
@@ -71,9 +71,9 @@
                                 <td>{{ resource.created_at|date:"d M Y, H:i" }}</td>
                                 <td>
                                     {% if resource.indexing_status == "indexed" %}
-                                        <span class="badge bg-success">Indexed</span>
+                                        <span class="badge bg-success">Ready for AI search</span>
                                     {% elif resource.indexing_status == "not_indexed" %}
-                                        <span class="badge bg-warning text-dark">Not indexed</span>
+                                        <span class="badge bg-warning text-dark">Needs preparation</span>
                                     {% else %}
                                         <span class="badge bg-secondary">Status unavailable</span>
                                     {% endif %}
@@ -84,7 +84,7 @@
                                         <a href="{{ resource.file.url }}" download class="btn btn-sm btn-outline-secondary">Download</a>
                                         <form method="post" action="{% url 'teacher_resource_reindex' resource.pk %}">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-outline-success">Re-index</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Prepare for AI search</button>
                                         </form>
                                         <form method="post" action="{% url 'teacher_resource_delete' resource.pk %}" onsubmit="return confirm('Delete this resource and its uploaded file?');">
                                             {% csrf_token %}
@@ -110,7 +110,11 @@
                                 {% if resource.description %}<p class="card-text mt-2">{{ resource.description }}</p>{% endif %}
                                 <small class="text-muted mb-3 mt-auto">Uploaded: {{ resource.created_at|date:"d M Y, H:i" }}</small>
                                 <div class="d-flex gap-2">
-                                    <a href="{{ resource.file.url }}" target="_blank" class="btn btn-primary">View / Open</a>
+                                    {% if request.user.role == "STUDENT" %}
+                                        <a href="{% url 'student_resource_detail' resource.pk %}" class="btn btn-primary">Open Resource</a>
+                                    {% else %}
+                                        <a href="{{ resource.file.url }}" target="_blank" rel="noopener" class="btn btn-primary">View / Open</a>
+                                    {% endif %}
                                     <a href="{{ resource.file.url }}" download class="btn btn-outline-primary">Download</a>
                                 </div>
                             </div>
@@ -137,7 +141,7 @@
                 {% else %}
 
                     <p class="text-muted">
-                        No study resources have been uploaded yet.
+                        You haven't uploaded any resources yet.
                     </p>
 
                 {% endif %}

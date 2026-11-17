@@ -26,7 +26,7 @@
         }
 
         .page-container {
-            max-width: 1000px;
+            max-width: 1280px;
             margin: 40px auto;
         }
 
@@ -119,10 +119,12 @@
 
     </style>
 
+    {% include "accounts/partials/student_portal_styles.html" %}
 </head>
 
 
-<body>
+<body class="teacher-parent-portal">
+{% include "accounts/partials/student_portal_header.html" %}
 
 <div class="container page-container">
 
@@ -159,32 +161,11 @@
         <div id="markMismatchWarning" class="alert alert-warning mt-3 mb-0 {% if existing_question_marks == assessment.total_marks %}d-none{% endif %}" role="alert"></div>
         <div id="markMatchMessage" class="text-success fw-semibold mt-2 {% if existing_question_marks != assessment.total_marks %}d-none{% endif %}" role="status">Question marks match the configured test total.</div>
         <div id="pendingMarksSummary" class="small text-muted mt-2"></div>
-        <div class="small text-muted mt-2">Your assessment remains saved as a draft while unpublished. Publishing is blocked until question marks match the test total.</div>
+        <div class="small text-muted mt-2">Your assessment is saved as a draft until you submit or upload it. Completing the assessment is blocked until question marks match the total.</div>
     </div>
 
-    {% if existing_questions %}
-    <div class="card card-body mb-4">
-        <h2 class="h5">Saved questions</h2>
-        <div class="list-group">
-            {% for saved_question in existing_questions %}
-            <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div class="me-auto"><strong>Question {{ saved_question.order }}</strong><div class="small text-muted">{{ saved_question.question_text|truncatewords:18 }}</div></div>
-                <form method="post" class="d-flex align-items-center gap-2">
-                    {% csrf_token %}<input type="hidden" name="action" value="update_marks"><input type="hidden" name="question_id" value="{{ saved_question.pk }}">
-                    <label class="small" for="saved-marks-{{ saved_question.pk }}">Marks</label>
-                    <input type="number" name="marks" id="saved-marks-{{ saved_question.pk }}" class="form-control form-control-sm saved-question-marks" style="width:6rem" min="1" required value="{{ saved_question.marks }}" data-original-marks="{{ saved_question.marks }}" aria-label="Marks for question {{ saved_question.order }}">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                </form>
-                <form method="post" onsubmit="return confirm('Delete Question {{ saved_question.order }}?');">
-                    {% csrf_token %}<input type="hidden" name="action" value="delete_question"><input type="hidden" name="question_id" value="{{ saved_question.pk }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                </form>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-
+    <div class="row g-4 align-items-start">
+    <div class="col-lg-8">
 
     <!-- Question form -->
 
@@ -670,7 +651,7 @@
                         value="complete"
                         class="btn btn-success"
                     >
-                        Complete Test Making
+                        {% if assessment.assessment_type == "TEST" %}Review Test{% else %}Review Assignment{% endif %}
                     </button>
 
                 </div>
@@ -681,7 +662,45 @@
 
     </div>
 
-</div>
+    </div>
+    <aside class="col-lg-4">
+        <div class="card card-body mb-3 position-sticky" style="top: 1rem;">
+            <h2 class="h5">Question preview</h2>
+            <div id="liveQuestionPreview" class="text-muted small" aria-live="polite">Start typing to preview this question.</div>
+            <div class="mt-3"><strong>Marks:</strong> <span id="liveQuestionMarks">1</span></div>
+            <hr>
+            <h3 class="h6">Added questions ({{ existing_question_count }})</h3>
+            {% if existing_questions %}
+            <div class="list-group list-group-flush mb-3">
+                {% for saved_question in existing_questions %}
+                <div class="list-group-item px-0">
+                    <div class="d-flex justify-content-between gap-2">
+                        <strong>Q{{ saved_question.order }}</strong>
+                        <span class="badge bg-primary">{{ saved_question.marks }} mark{{ saved_question.marks|pluralize }}</span>
+                    </div>
+                    <div class="small text-muted mb-2">{{ saved_question.question_text|truncatewords:18 }}</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <form method="post" class="d-flex align-items-center gap-2">
+                            {% csrf_token %}<input type="hidden" name="action" value="update_marks"><input type="hidden" name="question_id" value="{{ saved_question.pk }}">
+                            <label class="small" for="saved-marks-{{ saved_question.pk }}">Marks</label>
+                            <input type="number" name="marks" id="saved-marks-{{ saved_question.pk }}" class="form-control form-control-sm saved-question-marks" style="width:5rem" min="1" required value="{{ saved_question.marks }}" data-original-marks="{{ saved_question.marks }}" aria-label="Marks for question {{ saved_question.order }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                        </form>
+                        <form method="post" onsubmit="return confirm('Delete Question {{ saved_question.order }}?');">
+                            {% csrf_token %}<input type="hidden" name="action" value="delete_question"><input type="hidden" name="question_id" value="{{ saved_question.pk }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="small text-muted mb-3">No questions saved yet.</p>
+            {% endif %}
+            <a href="{% url 'test_preview' assessment.id %}" class="btn btn-outline-secondary w-100">Review Saved Assessment</a>
+        </div>
+    </aside>
+    </div>
 
 
 <script>
@@ -1056,6 +1075,8 @@
     const pendingMarksSummary = document.getElementById("pendingMarksSummary");
     const mismatchWarning = document.getElementById("markMismatchWarning");
     const matchMessage = document.getElementById("markMatchMessage");
+    const liveQuestionPreview = document.getElementById("liveQuestionPreview");
+    const liveQuestionMarks = document.getElementById("liveQuestionMarks");
     const savedMarkInputs = Array.from(document.querySelectorAll(".saved-question-marks"));
     let pendingQuestionMarksTouched = false;
 
@@ -1087,6 +1108,9 @@
         pendingMarksSummary.textContent = hasPendingQuestion
             ? `Preview includes the new question at ${hasValidNewMarks ? rawMarks : 0} marks; saved-question mark edits are included.`
             : "Change a saved question's marks or enter a new question to preview the updated allocation.";
+        liveQuestionPreview.textContent = questionTextInput.value.trim()
+            || "Start typing to preview this question.";
+        liveQuestionMarks.textContent = hasValidNewMarks ? rawMarks : "—";
     }
 
     marksInput.addEventListener("input", () => {

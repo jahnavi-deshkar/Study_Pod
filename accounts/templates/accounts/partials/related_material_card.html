@@ -1,0 +1,119 @@
+<section class="card shadow-sm" aria-labelledby="relatedMaterialHeading">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h2 id="relatedMaterialHeading" class="h5 mb-1">Related Material &amp; Web Links</h2>
+                <p class="text-muted small mb-0">Related class resources and supplementary references from the web.</p>
+            </div>
+            <button type="button" id="refreshRelatedMaterials" class="btn btn-outline-primary btn-sm" {% if indexing_status != "indexed" %}disabled{% endif %}>
+                Refresh results
+            </button>
+        </div>
+
+        <div id="relatedMaterialStatus" class="small mt-3" role="status" aria-live="polite">
+            {% if indexing_status == "indexed" %}Finding related materials…{% else %}Prepare this resource for AI search before finding related materials.{% endif %}
+        </div>
+        <div id="relatedTopics" class="d-flex flex-wrap gap-2 mt-3"></div>
+
+        <div class="row g-4 mt-1">
+            <div class="col-md-6">
+                <h3 class="h6">Related class resources</h3>
+                <div id="internalMatches" class="list-group"></div>
+            </div>
+            <div class="col-md-6">
+                <h3 class="h6">Web references</h3>
+                <div id="webReferences" class="list-group"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(() => {
+    const ready = "{{ indexing_status }}" === "indexed";
+    const endpoint = "{% url 'resource_related_material' resource.pk %}";
+    const status = document.getElementById("relatedMaterialStatus");
+    const topics = document.getElementById("relatedTopics");
+    const internalList = document.getElementById("internalMatches");
+    const webList = document.getElementById("webReferences");
+    const refresh = document.getElementById("refreshRelatedMaterials");
+
+    function showEmpty(container, message) {
+        const note = document.createElement("div");
+        note.className = "small text-muted py-2";
+        note.textContent = message;
+        container.replaceChildren(note);
+    }
+
+    function appendReference(container, item, external) {
+        const card = document.createElement("a");
+        card.className = "list-group-item list-group-item-action";
+        card.href = item.url;
+        if (external) {
+            card.target = "_blank";
+            card.rel = "noopener noreferrer";
+        }
+
+        const title = document.createElement("div");
+        title.className = "fw-semibold";
+        title.textContent = item.title || "Study reference";
+        card.appendChild(title);
+
+        if (item.subject) {
+            const subject = document.createElement("div");
+            subject.className = "small text-primary mt-1";
+            subject.textContent = item.subject;
+            card.appendChild(subject);
+        }
+        if (item.summary) {
+            const summary = document.createElement("div");
+            summary.className = "small text-muted mt-1";
+            summary.textContent = item.summary;
+            card.appendChild(summary);
+        }
+        container.appendChild(card);
+    }
+
+    async function loadRelatedMaterials() {
+        if (!ready) return;
+        refresh.disabled = true;
+        status.textContent = "Finding related class materials and web references…";
+        topics.replaceChildren();
+        internalList.replaceChildren();
+        webList.replaceChildren();
+
+        try {
+            const response = await fetch(endpoint, {
+                method: "GET",
+                credentials: "same-origin",
+                headers: {"Accept": "application/json"},
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Could not load related materials.");
+
+            for (const item of data.key_topics || []) {
+                const topic = document.createElement("span");
+                topic.className = "badge rounded-pill text-bg-light border";
+                topic.textContent = item.topic + (item.summary ? ": " + item.summary : "");
+                topics.appendChild(topic);
+            }
+
+            for (const item of data.internal_matches || []) appendReference(internalList, item, false);
+            for (const item of data.web_references || []) appendReference(webList, item, true);
+
+            if (!internalList.children.length) showEmpty(internalList, "No other related resources were found in this class yet.");
+            if (!webList.children.length) showEmpty(webList, "No web references were found for these topics.");
+            status.textContent = "Related materials are ready.";
+        } catch (error) {
+            status.textContent = error.message || "Could not load related materials right now.";
+            showEmpty(internalList, "Related class resources could not be loaded.");
+            showEmpty(webList, "Web references could not be loaded.");
+        } finally {
+            refresh.disabled = false;
+        }
+    }
+
+    refresh.addEventListener("click", loadRelatedMaterials);
+    if (ready) loadRelatedMaterials();
+})();
+</script>

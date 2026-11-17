@@ -1,0 +1,20 @@
+<nav class="navbar navbar-expand-lg student-nav" aria-label="Student portal">
+    <div class="container-fluid student-nav-inner">
+        <a class="student-brand" href="{% url 'dashboard' %}" aria-label="StudyPod student dashboard">
+            <span class="student-brand-mark">dsp</span>
+            <span class="student-brand-copy">
+                <strong>StudyPod</strong>
+                <small>DSP ACADEMY · {% if user.role == "TEACHER" %}TEACHER PORTAL{% elif user.role == "PARENT" %}PARENT PORTAL{% else %}STUDENT PORTAL{% endif %}</small>
+            </span>
+        </a>
+        <div class="student-nav-links">
+            <a href="{% url 'notices' %}">Notices</a>
+            <span class="student-user-chip">
+                <span class="student-avatar">{% if user.first_name and user.last_name %}{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}{% else %}{{ user.get_full_name|default:user.username|first|upper }}{% endif %}</span>
+                {{ user.get_full_name|default:user.username }}
+            </span>
+            <a class="student-nav-button" href="{% url 'profile' %}">Profile</a>
+            <a class="student-nav-button student-logout" href="{% url 'logout' %}">Logout</a>
+        </div>
+    </div>
+</nav>

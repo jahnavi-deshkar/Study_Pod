@@ -24,4 +24,9 @@ urlpatterns = [
         views.resource_web_search,
         name="resource_web_search",
     ),
+    path(
+        "resource/<int:resource_id>/related/",
+        views.resource_related_material,
+        name="resource_related_material",
+    ),
 ]

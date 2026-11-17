@@ -1,7 +1,7 @@
 {% extends "accounts/base.html" %}
 {% block title %}Leave Review | StudyPod{% endblock %}
 {% block content %}
-<div class="container mt-4"><h1 class="h3">Student Leave Applications</h1><p class="text-muted">Review requests for your assigned classes.</p>
+<div class="container mt-4"><div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3"><div><h1 class="h3">Student Leave Applications</h1><p class="text-muted">Review requests for your assigned classes.</p></div><a class="btn btn-outline-primary" href="{% url 'teacher_leave_request' %}">Request Own Leave</a></div>
 <div id="reviewMessage"></div>
 <div class="card"><div class="card-body"><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Student</th><th>Dates</th><th>Type</th><th>Reason</th><th>Documents</th><th>Status / Review</th></tr></thead><tbody>
 {% for application in applications %}<tr><td>{{ application.student.user.get_full_name|default:application.student.user.username }}<div class="small text-muted">{{ application.student_class }}</div></td><td>{{ application.start_date|date:"d M Y" }} – {{ application.end_date|date:"d M Y" }}<div class="small text-muted">{{ application.total_days }} day{{ application.total_days|pluralize }}</div></td><td>{{ application.get_leave_type_display }}</td><td>{{ application.reason }}</td><td>{% for attachment in application.attachments.all %}<a href="{% url 'leave_attachment_download' attachment.pk %}">{{ attachment.file.name|cut:"leave_attachments/" }}</a><br>{% empty %}—{% endfor %}</td><td>

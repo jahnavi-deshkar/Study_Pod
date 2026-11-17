@@ -45,6 +45,11 @@ urlpatterns = [
         name="resource_list"
     ),
     path(
+        "resources/student/<int:resource_id>/",
+        views.student_resource_detail,
+        name="student_resource_detail",
+    ),
+    path(
         "resources/<int:resource_id>/",
         views.teacher_resource_detail,
         name="teacher_resource_detail",
@@ -64,6 +69,18 @@ urlpatterns = [
         "assessments/create/",
         views.create_assessment,
         name="create_assessment"
-    )
+    ),
+    path(
+        "assessments/create/assignment/",
+        views.create_assessment,
+        {"workflow_type": "ASSIGNMENT"},
+        name="create_assignment",
+    ),
+    path(
+        "assessments/create/test/",
+        views.create_assessment,
+        {"workflow_type": "TEST"},
+        name="create_test",
+    ),
 
 ]

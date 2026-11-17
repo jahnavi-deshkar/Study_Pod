@@ -1,4 +1,7 @@
 from pathlib import Path
+import re
+import xml.etree.ElementTree as ElementTree
+import zipfile
 
 import chromadb
 from django.conf import settings
@@ -32,7 +35,7 @@ class StudyPodVectorStore:
         return self._model
 
     def ingest_resource(self, resource_id, file_path, metadata):
-        """Extract, chunk, embed, and index a PDF or TXT resource."""
+        """Extract, chunk, embed, and prepare a PDF, TXT, or XLSX resource for AI search."""
         path = Path(file_path)
         if not path.is_file():
             raise FileNotFoundError(f"Resource file not found: {path}")
@@ -167,7 +170,63 @@ class StudyPodVectorStore:
         if suffix == ".txt":
             return path.read_text(encoding="utf-8", errors="replace")
 
-        raise ValueError("Only PDF and TXT resources can be indexed.")
+        if suffix == ".xlsx":
+            return StudyPodVectorStore._extract_xlsx_text(path)
+
+        raise ValueError("This file type is not supported for AI search. Use a PDF, TXT, or XLSX file.")
+
+    @staticmethod
+    def _extract_xlsx_text(path):
+        """Read visible cell values from an Excel workbook using the standard library."""
+        namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+        text_namespace = namespace + "t"
+        shared_strings = []
+
+        with zipfile.ZipFile(path) as workbook:
+            if "xl/sharedStrings.xml" in workbook.namelist():
+                shared_root = ElementTree.fromstring(workbook.read("xl/sharedStrings.xml"))
+                shared_strings = [
+                    "".join(node.text or "" for node in item.iter(text_namespace))
+                    for item in shared_root.findall(namespace + "si")
+                ]
+
+            sheet_paths = sorted(
+                name for name in workbook.namelist()
+                if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)
+            )
+            extracted_sheets = []
+            for sheet_number, sheet_path in enumerate(sheet_paths, start=1):
+                sheet_root = ElementTree.fromstring(workbook.read(sheet_path))
+                rows = []
+                for row in sheet_root.iter(namespace + "row"):
+                    values = []
+                    for cell in row.findall(namespace + "c"):
+                        value_node = cell.find(namespace + "v")
+                        cell_type = cell.attrib.get("t")
+                        if cell_type == "inlineStr":
+                            value = "".join(
+                                node.text or ""
+                                for node in cell.iter(text_namespace)
+                            )
+                        elif value_node is None or value_node.text is None:
+                            value = ""
+                        elif cell_type == "s":
+                            try:
+                                value = shared_strings[int(value_node.text)]
+                            except (ValueError, IndexError):
+                                value = ""
+                        else:
+                            value = value_node.text
+                        if value:
+                            values.append(str(value))
+                    if values:
+                        rows.append(" | ".join(values))
+                if rows:
+                    extracted_sheets.append(
+                        f"Sheet {sheet_number}:\n" + "\n".join(rows)
+                    )
+
+        return "\n\n".join(extracted_sheets)
 
     def _split_text(self, text):
         text = " ".join((text or "").split())

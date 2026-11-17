@@ -39,6 +39,8 @@ class StudentProfile(models.Model):
         related_name="student_profile"
     )
     roll_number = models.CharField(max_length=50, unique=True)
+    batch = models.CharField(max_length=50, blank=True, default="")
+    phone_number = models.CharField(max_length=20, blank=True, default="")
     profile_picture = models.ImageField(
         upload_to="student_profiles/",
         blank=True,
@@ -56,6 +58,13 @@ class StudentProfile(models.Model):
         null=True,
         blank=True,
         related_name="students"
+    )
+    mentor = models.ForeignKey(
+        "TeacherProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mentees",
     )
 
     def __str__(self):

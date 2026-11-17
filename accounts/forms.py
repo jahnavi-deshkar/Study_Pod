@@ -34,9 +34,10 @@ class TeacherProfileForm(forms.ModelForm):
 class StudentProfileForm(forms.ModelForm):
     class Meta:
         model = StudentProfile
-        fields = ["profile_picture"]
+        fields = ["phone_number", "profile_picture"]
         widgets = {
-            "profile_picture": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+            "phone_number": forms.TextInput(attrs={"class": "form-control", "autocomplete": "tel"}),
+            "profile_picture": forms.FileInput(attrs={"class": "visually-hidden", "accept": "image/png,image/jpeg"}),
         }
 
 

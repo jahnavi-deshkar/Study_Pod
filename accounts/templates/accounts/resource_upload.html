@@ -1,185 +1,125 @@
 {% extends "accounts/base.html" %}
 
+{% block title %}Study Resources | StudyPod{% endblock %}
+
 {% block content %}
-
-<div class="container mt-5">
-
+<div class="container-fluid px-0 mt-2">
     <div class="mb-4">
-        <h2>Upload Study Resource</h2>
-
-        <p class="text-muted">
-            Upload learning materials for one of your assigned classes and subjects.
-        </p>
+        <h1 class="h2 fw-bold">Study Resources</h1>
+        <p class="text-muted mb-0">Browse past uploads or add a new resource for one of your assigned classes.</p>
     </div>
 
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }}">
-                {{ message }}
-            </div>
-        {% endfor %}
-    {% endif %}
-
-    <div class="card shadow-sm">
-
-        <div class="card-body">
-
-            <form method="POST" enctype="multipart/form-data">
-
-                {% csrf_token %}
-
-                <div class="mb-3">
-
-                    <label
-                        for="title"
-                        class="form-label"
-                    >
-                        Resource Title
-                    </label>
-
-                    <input
-                        type="text"
-                        class="form-control"
-                        id="title"
-                        name="title"
-                        placeholder="Example: Quadratic Equations Notes"
-                        required
-                    >
-
-                </div>
-
-
-                <div class="mb-3">
-
-                    <label
-                        for="description"
-                        class="form-label"
-                    >
-                        Description
-                    </label>
-
-                    <textarea
-                        class="form-control"
-                        id="description"
-                        name="description"
-                        rows="4"
-                        placeholder="Briefly describe this resource..."
-                    ></textarea>
-
-                </div>
-
-
-                <div class="mb-3">
-
-                    <label
-                        for="student_class"
-                        class="form-label"
-                    >
-                        Class
-                    </label>
-
-                    <select
-                        class="form-select"
-                        id="student_class"
-                        name="student_class"
-                        required
-                    >
-
-                        <option value="">
-                            Select Class
-                        </option>
-
-                        {% for assignment in assignments %}
-
-                            <option
-                                value="{{ assignment.student_class.id }}"
-                            >
-                                {{ assignment.student_class.name }}
-                                -
-                                {{ assignment.student_class.section }}
-                            </option>
-
-                        {% endfor %}
-
-                    </select>
-
-                </div>
-
-
-                <div class="mb-3">
-
-                    <label
-                        for="subject"
-                        class="form-label"
-                    >
-                        Subject
-                    </label>
-
-                    <select
-                        class="form-select"
-                        id="subject"
-                        name="subject"
-                        required
-                    >
-
-                        <option value="">
-                            Select Subject
-                        </option>
-
-                        {% for assignment in assignments %}
-
-                            <option
-                                value="{{ assignment.subject.id }}"
-                            >
-                                {{ assignment.subject.name }}
-                                ({{ assignment.subject.code }})
-                            </option>
-
-                        {% endfor %}
-
-                    </select>
-
-                </div>
-
-
-                <div class="mb-4">
-
-                    <label
-                        for="file"
-                        class="form-label"
-                    >
-                        Resource File
-                    </label>
-
-                    <input
-                        type="file"
-                        class="form-control"
-                        id="file"
-                        name="file"
-                        required
-                    >
-
-                    <div class="form-text">
-                        Upload a PDF, document, presentation,
-                        or other learning material.
+    <div class="row g-4 align-items-start">
+        <section class="col-lg-7" aria-labelledby="pastUploadsHeading">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 id="pastUploadsHeading" class="h5 mb-0">Past uploads</h2>
+                        <span class="badge text-bg-secondary">{{ past_uploads|length }}</span>
                     </div>
 
+                    {% if past_uploads %}
+                        <div class="d-flex flex-column gap-3" style="max-height: 72vh; overflow-y: auto;">
+                            {% for resource in past_uploads %}
+                                <article class="border rounded-3 p-3">
+                                    <div class="d-flex justify-content-between align-items-start gap-3">
+                                        <div class="min-w-0">
+                                            <h3 class="h6 fw-semibold mb-1 text-break">{{ resource.title }}</h3>
+                                            <div class="small text-muted">
+                                                {{ resource.subject.name }} · {{ resource.student_class.name }}{% if resource.student_class.section %} · Section {{ resource.student_class.section }}{% endif %}
+                                            </div>
+                                            <div class="small text-muted mt-1">Uploaded {{ resource.created_at|date:"d M Y, H:i" }}</div>
+                                            {% if resource.description %}<p class="small mb-0 mt-2">{{ resource.description|truncatechars:140 }}</p>{% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <a href="{% url 'teacher_resource_detail' resource.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                                        <a href="{{ resource.file.url }}" download class="btn btn-sm btn-outline-secondary">Download</a>
+                                        <form method="post" action="{% url 'teacher_resource_reindex' resource.pk %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Prepare for AI search</button>
+                                        </form>
+                                        <form method="post" action="{% url 'teacher_resource_delete' resource.pk %}" onsubmit="return confirm('Delete this resource and its uploaded file?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                        </form>
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <h3 class="h6">No past uploads yet</h3>
+                            <p class="text-muted mb-0">Resources you upload will appear here.</p>
+                        </div>
+                    {% endif %}
                 </div>
+            </div>
+        </section>
 
+        <section class="col-lg-5" aria-labelledby="newResourceHeading">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h2 id="newResourceHeading" class="h5 mb-3">Upload a new resource</h2>
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
 
-                <button
-                    type="submit"
-                    class="btn btn-primary"
-                >
-                    Upload Resource
-                </button>
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Resource title</label>
+                            <input type="text" class="form-control" id="title" name="title" maxlength="200" placeholder="Example: Quadratic Equations Notes" required>
+                        </div>
 
-            </form>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" placeholder="Briefly describe this resource..."></textarea>
+                        </div>
 
-        </div>
+                        <div class="mb-3">
+                            <label for="student_class" class="form-label">Class</label>
+                            <select class="form-select" id="student_class" name="student_class" required>
+                                <option value="">Select class</option>
+                                {% for assignment in assignments %}
+                                    <option value="{{ assignment.student_class.id }}">{{ assignment.student_class.name }} · {{ assignment.student_class.section }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
 
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Subject</label>
+                            <select class="form-select" id="subject" name="subject" required>
+                                <option value="">Select subject</option>
+                                {% for assignment in assignments %}
+                                    <option value="{{ assignment.subject.id }}" data-class-id="{{ assignment.student_class.id }}">{{ assignment.subject.name }} ({{ assignment.subject.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="file" class="form-label">Resource file</label>
+                            <input type="file" class="form-control" id="file" name="file" required>
+                            <div class="form-text">Upload a PDF, document, presentation, or other learning material.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Upload Resource</button>
+                    </form>
+                </div>
+            </div>
+        </section>
     </div>
-
 </div>
 
+<script>
+(() => {
+    const classSelect = document.getElementById("student_class");
+    const subjectSelect = document.getElementById("subject");
+    const subjectOptions = [...subjectSelect.options].slice(1);
+    classSelect.addEventListener("change", () => {
+        const classId = classSelect.value;
+        subjectSelect.value = "";
+        subjectOptions.forEach(option => {
+            option.hidden = Boolean(classId) && option.dataset.classId !== classId;
+        });
+    });
+})();
+</script>
 {% endblock %}

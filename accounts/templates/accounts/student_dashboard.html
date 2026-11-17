@@ -1,257 +1,144 @@
 {% extends "accounts/base.html" %}
 
+{% block title %}Student Dashboard | StudyPod{% endblock %}
+
 {% block content %}
+<style>
+    .student-dashboard {
+        --student-primary: #c8102e;
+        --student-primary-dark: #a90827;
+        --student-primary-soft: #fff0f3;
+        --student-ink: #172033;
+        --student-muted: #687386;
+        --student-line: #e7e9ef;
+        --student-shadow: 0 12px 30px rgba(25, 34, 53, .07);
+        width: min(1240px, 89vw);
+        max-width: 100%;
+        margin: 8px auto 24px;
+        color: var(--student-ink);
+    }
+    .student-welcome-row { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 22px 0 28px; }
+    .student-eyebrow { color: var(--student-primary); text-transform: uppercase; letter-spacing: 2px; font-size: 10px; font-weight: 800; margin-bottom: 11px; }
+    .student-dashboard h1 { color: var(--student-ink); font-size: clamp(28px, 3vw, 37px); line-height: 1.1; letter-spacing: -1.2px; margin: 0; font-weight: 750; }
+    .student-welcome-copy { color: var(--student-muted); margin: 10px 0 0; font-size: 14px; }
+    .student-welcome-copy strong { color: var(--student-ink); }
+    .student-date-pill { background: white; border: 1px solid var(--student-line); color: #596477; border-radius: 999px; padding: 10px 14px; font-size: 12px; font-weight: 650; white-space: nowrap; box-shadow: 0 3px 12px rgba(25,34,53,.03); }
+    .student-accent-line { height: 3px; width: 62px; border-radius: 9px; background: linear-gradient(90deg, var(--student-primary), #f28a9e); margin-top: 18px; }
+    .student-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 34px 0 15px; }
+    .student-section-heading h2 { color: var(--student-ink); font-size: 16px; margin: 0; letter-spacing: -.2px; }
+    .student-section-heading span { color: var(--student-muted); font-size: 12px; }
+    .student-feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .student-feature-card {
+        min-height: 190px; background: #fff; border: 1px solid var(--student-line); border-radius: 17px;
+        padding: 21px 21px 19px; box-shadow: var(--student-shadow); display: flex; flex-direction: column;
+        align-items: flex-start; position: relative; overflow: hidden; color: var(--student-ink) !important;
+        text-decoration: none; transition: transform .22s, box-shadow .22s, border-color .22s;
+    }
+    .student-feature-card::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, var(--student-primary), #f08ba0); opacity: 0; transition: opacity .2s; }
+    .student-feature-card:hover { transform: translateY(-4px); border-color: #edc2cb; box-shadow: 0 16px 34px rgba(92, 23, 39, .10); }
+    .student-feature-card:hover::before { opacity: 1; }
+    .student-card-top { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 13px; }
+    .student-feature-icon { width: 43px; height: 43px; border-radius: 13px; display: grid; place-items: center; background: var(--student-primary-soft); color: var(--student-primary); font-size: 20px; }
+    .student-card-arrow { color: #a6adba; font-size: 19px; transition: transform .2s, color .2s; }
+    .student-feature-card:hover .student-card-arrow { color: var(--student-primary); transform: translate(2px, -2px); }
+    .student-feature-card h3 { color: var(--student-ink); margin: 0 0 7px; font-size: 16px; letter-spacing: -.25px; }
+    .student-feature-card p { color: var(--student-muted); margin: 0; font-size: 13px; line-height: 1.6; max-width: 340px; }
+    .student-card-action { margin-top: auto; padding-top: 17px; color: var(--student-primary); font-size: 12px; font-weight: 750; display: inline-flex; gap: 7px; align-items: center; }
+    .student-notice-banner { display: flex; align-items: center; gap: 14px; margin-top: 25px; padding: 16px 19px; background: linear-gradient(100deg, #fff, #fff5f7); border: 1px solid #f0d5dc; border-radius: 14px; }
+    .student-notice-icon { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: white; background: var(--student-primary); flex: 0 0 auto; font-weight: 800; }
+    .student-notice-banner strong { display: block; color: var(--student-ink); font-size: 13px; margin-bottom: 3px; }
+    .student-notice-banner p { color: var(--student-muted); margin: 0; font-size: 12px; }
+    .student-dashboard-footer { text-align: center; color: #9299a6; font-size: 11px; padding: 24px 0 0; }
+    @media (max-width: 900px) {
+        .student-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+        .student-welcome-row { align-items: flex-start; flex-direction: column; }
+        .student-feature-grid { grid-template-columns: 1fr; gap: 13px; }
+        .student-feature-card { min-height: 172px; }
+        .student-section-heading { align-items: flex-start; flex-direction: column; margin-top: 28px; }
+    }
+</style>
 
-<div class="container mt-5">
+<div class="student-dashboard">
+    <section class="student-welcome-row">
+        <div>
+            <div class="student-eyebrow">DSP Academy · Student Portal</div>
+            <h1>Student Dashboard</h1>
+            <p class="student-welcome-copy">Welcome back, <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>. Here's your academic space at a glance.</p>
+            <div class="student-accent-line"></div>
+        </div>
+        <div class="student-date-pill" id="student-dashboard-date">Your StudyPod workspace</div>
+    </section>
 
-    <!-- Page Heading -->
-
-    <div class="mb-4">
-        <h2>Student Dashboard</h2>
-
-        <p class="text-muted">
-            Welcome, {{ request.user.get_full_name|default:request.user.username }}!
-        </p>
+    <div class="student-section-heading">
+        <h2>Your workspace</h2>
+        <span>Everything you need, in one place</span>
     </div>
 
-
-    <!-- Dashboard Cards -->
-
-    <div class="row">
-
-
-        <!-- Notices -->
-
-        <div class="col-md-4 mb-4">
-
-            <div class="card shadow-sm h-100">
-
-                <div class="card-body d-flex flex-column">
-
-                    <h5 class="card-title">
-                        Notices
-                    </h5>
-
-                    <p class="card-text">
-                        View important announcements and notices
-                        from your teachers.
-                    </p>
-
-                    <div class="mt-auto">
-
-                        <a
-                            href="{% url 'notices' %}"
-                            class="btn btn-primary"
-                        >
-                            View Notices
-                        </a>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- Leave management -->
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
-                <h5 class="card-title">Leave Applications</h5>
-                <p class="card-text">Apply for leave and track your application history and decisions.</p>
-                <div class="mt-auto"><a href="{% url 'student_leave_page' %}" class="btn btn-primary">Manage Leave</a></div>
-            </div></div>
-        </div>
-
-        <!-- Attendance -->
-
-        <div class="col-md-4 mb-4">
-
-            <div class="card shadow-sm h-100">
-
-                <div class="card-body d-flex flex-column">
-
-                    <h5 class="card-title">
-                        Attendance
-                    </h5>
-
-                    <p class="card-text">
-                        View your attendance records,
-                        present days, and attendance percentage.
-                    </p>
-
-                    <div class="mt-auto">
-
-                        <a
-                            href="{% url 'academics_student_attendance' %}"
-                            class="btn btn-primary"
-                        >
-                            View Attendance
-                        </a>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- Profile -->
-
-        <div class="col-md-4 mb-4">
-
-            <div class="card shadow-sm h-100">
-
-                <div class="card-body d-flex flex-column">
-
-                    <h5 class="card-title">
-                        My Profile
-                    </h5>
-
-                    <p class="card-text">
-                        View and manage your personal profile
-                        information.
-                    </p>
-
-                    <div class="mt-auto">
-
-                        <a
-                            href="{% url 'profile' %}"
-                            class="btn btn-primary"
-                        >
-                            View Profile
-                        </a>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- Study Resources -->
-
-        <div class="col-md-4 mb-4">
-
-            <div class="card shadow-sm h-100">
-
-                <div class="card-body d-flex flex-column">
-
-                    <h5 class="card-title">
-                        Study Resources
-                    </h5>
-
-                    <p class="card-text">
-                        Access notes, documents, presentations,
-                        and other learning materials.
-                    </p>
-
-                    <div class="mt-auto">
-
-                        <a
-                            href="{% url 'resource_list' %}"
-                            class="btn btn-primary"
-                        >
-                            View Resources
-                        </a>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- Tests & Assignments -->
-
-        <div class="col-md-4 mb-4">
-
-            <div class="card shadow-sm h-100">
-
-                <div class="card-body d-flex flex-column">
-
-                    <h5 class="card-title">
-                        Tests & Assignments
-                    </h5>
-
-                    <p class="card-text">
-                        View upcoming tests, assignments,
-                        deadlines, and results.
-                    </p>
-
-                    <div class="mt-auto">
-
-                        <a
-                            href="{% url 'student_assessments' %}"
-                            class="btn btn-primary"
-                        >
-                            View Tests
-                        </a>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- Doubts & Discussions -->
-
-        <div class="col-md-4 mb-4">
-
-            <div class="card shadow-sm h-100">
-
-                <div class="card-body d-flex flex-column">
-
-                    <h5 class="card-title">
-                        Doubts & Discussions
-                    </h5>
-
-                    <p class="card-text">
-                        Ask questions, discuss academic topics,
-                        and get help from teachers.
-                    </p>
-
-                    <div class="mt-auto">
-
-                        <a href="{% url 'doubt_threads' %}" class="btn btn-primary">View Discussions</a>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
-                <h5 class="card-title">Student Progress</h5>
-                <p class="card-text">Review your assessment results and subject progress.</p>
-                <div class="mt-auto"><a href="{% url 'student_analytics' %}" class="btn btn-primary">View Analytics</a></div>
-            </div></div>
-        </div>
-
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
-                <h5 class="card-title">Timetable</h5>
-                <p class="card-text">View your weekly class schedule.</p>
-                <div class="mt-auto"><a href="{% url 'student_timetable' %}" class="btn btn-primary">View Timetable</a></div>
-            </div></div>
-        </div>
-
-
-    </div>
-
+    <section class="student-feature-grid" aria-label="Student dashboard features">
+        <a class="student-feature-card" href="{% url 'notices' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">▤</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Notices</h3><p>Stay updated with important announcements, circulars, and messages from your teachers.</p>
+            <span class="student-card-action">View notices <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'student_leave_page' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">✎</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Leave Applications</h3><p>Submit a leave request and keep track of application history and decisions.</p>
+            <span class="student-card-action">Manage leave <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'academics_student_attendance' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">▦</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Attendance</h3><p>Review attendance records, present days, and your overall attendance percentage.</p>
+            <span class="student-card-action">View attendance <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'profile' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">♙</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>My Profile</h3><p>View and update your personal details and student account information.</p>
+            <span class="student-card-action">View profile <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'resource_list' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">▧</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Study Resources</h3><p>Find notes, documents, presentations, and learning materials shared by teachers.</p>
+            <span class="student-card-action">Explore resources <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'student_assessments' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">✓</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Tests &amp; Assignments</h3><p>Keep an eye on upcoming tests, assignment deadlines, and published results.</p>
+            <span class="student-card-action">View assessments <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'doubt_threads' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">☏</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Doubts &amp; Discussions</h3><p>Ask questions, discuss academic topics, and get support from your teachers.</p>
+            <span class="student-card-action">Join discussions <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'student_analytics' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">⌁</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Student Progress</h3><p>Understand your assessment results and follow your progress across subjects.</p>
+            <span class="student-card-action">View analytics <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="student-feature-card" href="{% url 'student_timetable' %}">
+            <div class="student-card-top"><span class="student-feature-icon" aria-hidden="true">▣</span><span class="student-card-arrow" aria-hidden="true">↗</span></div>
+            <h3>Timetable</h3><p>Check your weekly class schedule and plan your study time ahead.</p>
+            <span class="student-card-action">View timetable <span aria-hidden="true">→</span></span>
+        </a>
+    </section>
+
+    <section class="student-notice-banner" aria-label="StudyPod reminder">
+        <div class="student-notice-icon" aria-hidden="true">!</div>
+        <div><strong>Stay connected with StudyPod</strong><p>Check the Notices section regularly so you don't miss important academic updates.</p></div>
+    </section>
+
+    <footer class="student-dashboard-footer">© <span id="student-dashboard-year"></span> DSP Academy · StudyPod Student Portal</footer>
 </div>
 
+<script>
+(() => {
+    const now = new Date();
+    const date = document.getElementById("student-dashboard-date");
+    const year = document.getElementById("student-dashboard-year");
+    if (date) date.textContent = now.toLocaleDateString(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"});
+    if (year) year.textContent = now.getFullYear();
+})();
+</script>
 {% endblock %}

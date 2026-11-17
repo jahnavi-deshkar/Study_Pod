@@ -3,155 +3,280 @@
 {% block title %}My Profile | StudyPod{% endblock %}
 
 {% block content %}
+{% if request.user.role == "STUDENT" %}
+<style>
+    .student-profile-page {
+        --profile-primary: var(--sp-primary, #2563eb);
+        --profile-primary-hover: #1d4ed8;
+        --profile-background: var(--sp-background, #f8fafc);
+        --profile-border: var(--sp-border, #e2e8f0);
+        --profile-text: var(--sp-text, #1e293b);
+        --profile-muted: var(--sp-muted, #64748b);
+        max-width: 960px;
+        margin: 0 auto;
+        color: var(--profile-text);
+    }
+    .student-profile-page .profile-header { margin-bottom: 1.5rem; }
+    .student-profile-page .profile-header h1 { margin-bottom: .4rem; }
+    .student-profile-page .profile-card {
+        overflow: hidden;
+        border: 1px solid var(--profile-border);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+    }
+    .student-profile-page .profile-section {
+        padding: 1.75rem;
+        border-bottom: 1px solid var(--profile-border);
+    }
+    .student-profile-page .profile-section h2 {
+        margin-bottom: 1.25rem;
+        font-size: 1.1rem;
+        font-weight: 650;
+    }
+    .student-profile-page .profile-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.1rem 1.25rem;
+    }
+    .student-profile-page .profile-field { min-width: 0; }
+    .student-profile-page .profile-field.full-width { grid-column: 1 / -1; }
+    .student-profile-page .profile-field label {
+        display: block;
+        margin-bottom: .4rem;
+        color: var(--profile-muted);
+        font-size: .875rem;
+        font-weight: 600;
+    }
+    .student-profile-page .form-control {
+        border-color: var(--profile-border);
+        border-radius: 8px;
+        color: var(--profile-text);
+    }
+    .student-profile-page .form-control:focus {
+        border-color: var(--profile-primary);
+        box-shadow: 0 0 0 .2rem rgb(37 99 235 / 14%);
+    }
+    .student-profile-page .avatar-row {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+    .student-profile-page .avatar-preview {
+        display: grid;
+        width: 100px;
+        height: 100px;
+        flex: 0 0 100px;
+        place-items: center;
+        overflow: hidden;
+        border: 3px solid #fff;
+        border-radius: 50%;
+        background: #dbeafe;
+        box-shadow: 0 2px 8px rgb(15 23 42 / 12%);
+        color: var(--profile-primary);
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    .student-profile-page .avatar-preview img {
+        width: 100%; height: 100%; object-fit: cover;
+    }
+    .student-profile-page .upload-label {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .55rem .9rem;
+        border: 1px solid var(--profile-border);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--profile-text);
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .student-profile-page .upload-label:hover { border-color: var(--profile-primary); color: var(--profile-primary); }
+    .student-profile-page .readonly-value {
+        min-height: 42px;
+        padding: .6rem .8rem;
+        border: 1px solid var(--profile-border);
+        border-radius: 8px;
+        background: var(--profile-background);
+        color: var(--profile-muted);
+        overflow-wrap: anywhere;
+    }
+    .student-profile-page .profile-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: .75rem;
+        padding: 1.25rem 1.75rem;
+        background: var(--profile-background);
+    }
+    .student-profile-page .btn-save {
+        border-color: var(--profile-primary);
+        background: var(--profile-primary);
+        color: #fff;
+        font-weight: 600;
+    }
+    .student-profile-page .btn-save:hover { border-color: var(--profile-primary-hover); background: var(--profile-primary-hover); }
+    @media (max-width: 640px) {
+        .student-profile-page .profile-section { padding: 1.25rem; }
+        .student-profile-page .profile-grid { grid-template-columns: 1fr; }
+        .student-profile-page .profile-field.full-width { grid-column: auto; }
+        .student-profile-page .avatar-row { align-items: flex-start; }
+        .student-profile-page .profile-actions { padding: 1rem 1.25rem; }
+    }
+</style>
 
-<div class="row justify-content-center">
+<div class="student-profile-page">
+    <header class="profile-header">
+        <h1 class="h2 fw-bold">My Profile</h1>
+        <p class="text-muted mb-0">Manage your personal, contact, and academic information.</p>
+    </header>
 
-    <div class="col-lg-8">
+    <form method="post" enctype="multipart/form-data" class="profile-card">
+        {% csrf_token %}
 
-        <div class="mb-4">
-            <h2 class="fw-bold">My Profile</h2>
-            <p class="text-muted">
-                Manage your StudyPod account information.
-            </p>
-        </div>
-
-
-        <div class="card shadow-sm">
-
-            <div class="card-body p-4">
-
-                <form method="post" enctype="multipart/form-data">
-
-                    {% csrf_token %}
-
-                    <h5 class="mb-3">Basic Information</h5>
-
-                    <div class="row">
-
-                        <div class="col-md-6 mb-3">
-
-                            <label class="form-label">
-                                First Name
-                            </label>
-
-                            {{ user_form.first_name }}
-
-                        </div>
-
-
-                        <div class="col-md-6 mb-3">
-
-                            <label class="form-label">
-                                Last Name
-                            </label>
-
-                            {{ user_form.last_name }}
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="mb-4">
-
-                        <label class="form-label">
-                            Email Address
-                        </label>
-
-                        {{ user_form.email }}
-
-                    </div>
-
-
-                    <h5 class="mb-3">
-                        Role Information
-                    </h5>
-
-                    {% if request.user.role == "TEACHER" %}
-
-                        <div class="mb-3">
-
-                            <label class="form-label">
-                                Department
-                            </label>
-
-                            {{ profile_form.department }}
-
-                        </div>
-
-                        <div class="alert alert-secondary">
-                            Employee ID:
-                            <strong>
-                                {{ request.user.teacher_profile.employee_id }}
-                            </strong>
-                        </div>
-
-                    {% elif request.user.role == "STUDENT" %}
-
-                        <div class="mb-3">
-                            <label class="form-label" for="{{ profile_form.profile_picture.id_for_label }}">Profile picture</label>
-                            {% if request.user.student_profile.profile_picture %}
-                                <div class="mb-2"><img src="{{ request.user.student_profile.profile_picture.url }}" alt="Current profile picture" class="rounded-circle" style="width: 88px; height: 88px; object-fit: cover;"></div>
-                            {% endif %}
-                            {{ profile_form.profile_picture }}
-                            {% for error in profile_form.profile_picture.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                        </div>
-
-                        <div class="alert alert-secondary">
-
-                            <p class="mb-1">
-                                Roll Number:
-                                <strong>
-                                    {{ request.user.student_profile.roll_number }}
-                                </strong>
-                            </p>
-
-                            <p class="mb-1">
-                                Class:
-                                <strong>
-                                    {{ request.user.student_profile.student_class }}
-                                </strong>
-                            </p>
-
-                            <p class="mb-0">
-                                Parent:
-                                <strong>
-                                    {{ request.user.student_profile.parent }}
-                                </strong>
-                            </p>
-
-                        </div>
-
-                    {% elif request.user.role == "PARENT" %}
-
-                        <div class="mb-3">
-
-                            <label class="form-label">
-                                Phone Number
-                            </label>
-
-                            {{ profile_form.phone }}
-
-                        </div>
-
+        <section class="profile-section" aria-labelledby="personalDetailsHeading">
+            <h2 id="personalDetailsHeading">Personal details</h2>
+            <div class="avatar-row">
+                <div class="avatar-preview" id="avatarPreview">
+                    {% if request.user.student_profile.profile_picture %}
+                        <img src="{{ request.user.student_profile.profile_picture.url }}" alt="Current profile picture">
+                    {% else %}
+                        {{ request.user.first_name|default:request.user.username|slice:":1"|upper }}
                     {% endif %}
-
-
-                    <button
-                        type="submit"
-                        class="btn btn-primary"
-                    >
-                        Save Changes
-                    </button>
-
-                </form>
-
+                </div>
+                <div>
+                    <div class="fw-semibold mb-2">Profile picture</div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        {{ profile_form.profile_picture }}
+                        <label for="{{ profile_form.profile_picture.id_for_label }}" class="upload-label">Choose photo</label>
+                        <span id="fileName" class="small text-muted">JPG or PNG</span>
+                    </div>
+                    {% for error in profile_form.profile_picture.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                </div>
             </div>
 
+            <div class="profile-grid mt-4">
+                <div class="profile-field">
+                    <label for="{{ user_form.first_name.id_for_label }}">First name</label>
+                    {{ user_form.first_name }}
+                    {% for error in user_form.first_name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="profile-field">
+                    <label for="{{ user_form.last_name.id_for_label }}">Last name</label>
+                    {{ user_form.last_name }}
+                    {% for error in user_form.last_name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="profile-section" aria-labelledby="contactHeading">
+            <h2 id="contactHeading">Contact information</h2>
+            <div class="profile-grid">
+                <div class="profile-field full-width">
+                    <label for="{{ user_form.email.id_for_label }}">Email address</label>
+                    {{ user_form.email }}
+                    {% for error in user_form.email.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="profile-field full-width">
+                    <label for="{{ profile_form.phone_number.id_for_label }}">Phone number</label>
+                    {{ profile_form.phone_number }}
+                    {% for error in profile_form.phone_number.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="profile-section" aria-labelledby="academicDetailsHeading">
+            <h2 id="academicDetailsHeading">Academic and mentor details</h2>
+            <div class="profile-grid">
+                <div class="profile-field">
+                    <label>Roll number</label>
+                    <div class="readonly-value">{{ request.user.student_profile.roll_number|default:"Not assigned" }}</div>
+                </div>
+                <div class="profile-field">
+                    <label>Class and section</label>
+                    <div class="readonly-value">
+                        {% if request.user.student_profile.student_class %}
+                            {{ request.user.student_profile.student_class.name }} · {{ request.user.student_profile.student_class.section }}
+                        {% else %}Not assigned{% endif %}
+                    </div>
+                </div>
+                <div class="profile-field">
+                    <label>Batch / year</label>
+                    <div class="readonly-value">{{ request.user.student_profile.batch|default:"Not assigned" }}</div>
+                </div>
+                <div class="profile-field">
+                    <label>Assigned mentor</label>
+                    <div class="readonly-value">{{ request.user.student_profile.mentor|default:"Not assigned" }}</div>
+                </div>
+                <div class="profile-field full-width">
+                    <label>Parent / guardian</label>
+                    <div class="readonly-value">
+                        {% if request.user.student_profile.parent %}
+                            {{ request.user.student_profile.parent.user.get_full_name|default:request.user.student_profile.parent.user.username }}
+                            · {{ request.user.student_profile.parent.phone|default:"Contact not provided" }}
+                        {% else %}Not linked{% endif %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="profile-actions">
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-save">Save changes</button>
         </div>
-
-    </div>
-
+    </form>
 </div>
 
+<script>
+(() => {
+    const input = document.getElementById("{{ profile_form.profile_picture.id_for_label }}");
+    const preview = document.getElementById("avatarPreview");
+    const fileName = document.getElementById("fileName");
+    if (!input || !preview) return;
+    input.addEventListener("change", () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        fileName.textContent = file.name;
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            const image = document.createElement("img");
+            image.alt = "Selected profile picture preview";
+            image.src = reader.result;
+            preview.replaceChildren(image);
+        });
+        reader.readAsDataURL(file);
+    });
+})();
+</script>
+{% else %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="mb-4">
+            <h2 class="fw-bold">My Profile</h2>
+            <p class="text-muted">Manage your StudyPod account information.</p>
+        </div>
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <h5 class="mb-3">Basic Information</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label class="form-label" for="{{ user_form.first_name.id_for_label }}">First Name</label>{{ user_form.first_name }}</div>
+                        <div class="col-md-6 mb-3"><label class="form-label" for="{{ user_form.last_name.id_for_label }}">Last Name</label>{{ user_form.last_name }}</div>
+                    </div>
+                    <div class="mb-4"><label class="form-label" for="{{ user_form.email.id_for_label }}">Email Address</label>{{ user_form.email }}</div>
+                    <h5 class="mb-3">Role Information</h5>
+                    {% if request.user.role == "TEACHER" %}
+                        <div class="mb-3"><label class="form-label" for="{{ profile_form.department.id_for_label }}">Department</label>{{ profile_form.department }}</div>
+                        <div class="alert alert-secondary">Employee ID: <strong>{{ request.user.teacher_profile.employee_id }}</strong></div>
+                    {% elif request.user.role == "PARENT" %}
+                        <div class="mb-3"><label class="form-label" for="{{ profile_form.phone.id_for_label }}">Phone Number</label>{{ profile_form.phone }}</div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

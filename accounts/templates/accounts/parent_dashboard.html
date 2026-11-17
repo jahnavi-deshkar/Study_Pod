@@ -8,7 +8,7 @@
 
     <div class="mb-4">
 
-        <h2>Parent Dashboard</h2>
+        <div class="portal-eyebrow">DSP Academy · Parent Portal</div><h2>Parent Dashboard</h2>
 
         <p class="text-muted">
             Welcome, {{ request.user.get_full_name|default:request.user.username }}!
@@ -26,7 +26,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 
@@ -58,7 +58,7 @@
 
 
         <!-- Leave copies -->
-        <div class="col-md-4 mb-4"><div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+        <div class="col-md-4 mb-4"><div class="card dashboard-card shadow-sm h-100"><div class="card-body d-flex flex-column">
             <h5 class="card-title">Leave Applications</h5>
             <p class="card-text">View leave applications your child shared with you.</p>
             <div class="mt-auto"><a href="{% url 'parent_leave_page' %}" class="btn btn-primary">View Leave Copies</a></div>
@@ -68,7 +68,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 
@@ -103,7 +103,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 
@@ -138,7 +138,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 
@@ -168,7 +168,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 
@@ -197,7 +197,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 
@@ -223,7 +223,7 @@
         </div>
 
         <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100"><div class="card-body d-flex flex-column">
+            <div class="card dashboard-card shadow-sm h-100"><div class="card-body d-flex flex-column">
                 <h5 class="card-title">Student Doubts</h5>
                 <p class="card-text">Read class and subject discussions involving your child's class.</p>
                 <div class="mt-auto"><a href="{% url 'doubt_threads' %}" class="btn btn-primary">View Discussions</a></div>
@@ -235,7 +235,7 @@
 
         <div class="col-md-4 mb-4">
 
-            <div class="card shadow-sm h-100">
+            <div class="card dashboard-card shadow-sm h-100">
 
                 <div class="card-body d-flex flex-column">
 

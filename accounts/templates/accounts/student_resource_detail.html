@@ -1,0 +1,49 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}{{ resource.title }} | StudyPod{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4">
+        <a href="{% url 'resource_list' %}" class="text-decoration-none">&larr; Study resources</a>
+        <h1 class="h3 fw-bold mt-2 mb-1">{{ resource.title }}</h1>
+        <p class="text-muted mb-0">
+            {{ resource.subject.name }} · {{ resource.student_class.name }}{% if resource.student_class.section %} · {{ resource.student_class.section }}{% endif %}
+        </p>
+    </div>
+
+    <div class="row g-4 align-items-start">
+        <section class="col-lg-7" aria-label="Study resource">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                        <div>
+                            <div class="small text-muted">Uploaded by</div>
+                            <strong>{{ resource.teacher }}</strong>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{{ resource.file.url }}" target="_blank" rel="noopener" class="btn btn-outline-primary">Open file</a>
+                            <a href="{{ resource.file.url }}" download class="btn btn-outline-secondary">Download</a>
+                        </div>
+                    </div>
+                    {% if resource.description %}<p class="text-muted">{{ resource.description }}</p>{% endif %}
+
+                    {% if is_pdf %}
+                        <iframe src="{{ resource.file.url }}" title="{{ resource.title }} PDF" class="w-100 border rounded" style="height: 72vh; min-height: 480px"></iframe>
+                    {% elif is_image %}
+                        <img src="{{ resource.file.url }}" alt="{{ resource.title }}" class="img-fluid rounded border">
+                    {% else %}
+                        <div class="alert alert-light border mb-0">
+                            This file type cannot be previewed here. Use Open file or Download to view it.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <aside class="col-lg-5" aria-labelledby="onlineReferencesHeading">
+            {% include "accounts/partials/related_material_card.html" %}
+        </aside>
+    </div>
+</div>
+{% endblock %}

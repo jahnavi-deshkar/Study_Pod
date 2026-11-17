@@ -154,6 +154,9 @@ def question_create(request, assessment_id):
                 question.marks = updated_marks
                 question.save(update_fields=["marks"])
                 messages.success(request, "Question marks updated. Assessment totals have been recalculated.")
+            if assessment.workflow_status == Assessment.WorkflowStatus.PENDING_ADMIN:
+                assessment.workflow_status = Assessment.WorkflowStatus.DRAFT
+                assessment.save(update_fields=["workflow_status"])
             return redirect("question_create", assessment_id=assessment.id)
         question_text = (request.POST.get("question_text") or "").strip()
         question_type = request.POST.get("question_type")
@@ -260,6 +263,10 @@ def question_create(request, assessment_id):
         for index, image in enumerate(request.FILES.getlist("question_images")):
             QuestionImage.objects.create(question=question, image=image, order=index + 1)
 
+        if assessment.workflow_status == Assessment.WorkflowStatus.PENDING_ADMIN:
+            assessment.workflow_status = Assessment.WorkflowStatus.DRAFT
+            assessment.save(update_fields=["workflow_status"])
+
         messages.success(request, f"Question {next_question_number} saved successfully.")
         if action == "complete":
             return redirect("test_preview", assessment_id=assessment.id)
@@ -317,13 +324,25 @@ def test_preview(request, assessment_id):
                     assessment.total_marks = calculated_total_marks
                     assessment.save(update_fields=["total_marks"])
                     messages.success(request, f"Assessment total updated to {calculated_total_marks} marks.")
-        elif action == "publish":
+        elif action == "save_draft":
+            assessment.is_published = False
+            assessment.workflow_status = Assessment.WorkflowStatus.DRAFT
+            assessment.save(update_fields=["is_published", "workflow_status"])
+            messages.success(request, "Assessment saved as a draft and kept hidden from students.")
+        elif action in {"publish", "upload", "submit_admin"}:
             questions = assessment.questions.all()
             question_count = questions.count()
             calculated_total_marks = sum(question.marks for question in questions)
             strict_mark_validation = getattr(settings, "ASSESSMENT_MARKS_STRICT", True)
-            if question_count == 0:
-                messages.error(request, "Add at least one question before publishing this assessment.")
+            is_test = assessment.assessment_type == Assessment.AssessmentType.TEST
+            if action == "submit_admin" and not is_test:
+                messages.error(request, "Only Tests can be submitted for Admin review.")
+            elif action == "upload" and is_test:
+                messages.error(request, "Tests must be submitted for Admin review.")
+            elif action == "publish" and is_test:
+                messages.error(request, "Tests must be submitted for Admin review before they can be assigned.")
+            elif question_count == 0:
+                messages.error(request, "Add at least one question before completing this assessment.")
             elif calculated_total_marks != assessment.total_marks and strict_mark_validation:
                 messages.error(
                     request,
@@ -331,14 +350,21 @@ def test_preview(request, assessment_id):
                     f"{question_count} question(s) total {assessment.total_marks}. "
                     f"They currently total {calculated_total_marks}.",
                 )
+            elif action == "submit_admin":
+                assessment.is_published = False
+                assessment.workflow_status = Assessment.WorkflowStatus.PENDING_ADMIN
+                assessment.save(update_fields=["is_published", "workflow_status"])
+                messages.success(request, "Test submitted for Admin review.")
             else:
                 assessment.is_published = True
-                assessment.save(update_fields=["is_published"])
-                messages.success(request, "Assessment published for students.")
+                assessment.workflow_status = Assessment.WorkflowStatus.PUBLISHED
+                assessment.save(update_fields=["is_published", "workflow_status"])
+                messages.success(request, "Assignment uploaded and published for students.")
         elif request.POST.get("action") == "unpublish":
             assessment.is_published = False
-            assessment.save(update_fields=["is_published"])
-            messages.success(request, "Assessment is no longer available to students.")
+            assessment.workflow_status = Assessment.WorkflowStatus.DRAFT
+            assessment.save(update_fields=["is_published", "workflow_status"])
+            messages.success(request, "Assessment is no longer available to students and is now a draft.")
         elif request.POST.get("action") == "release_results":
             assessment.results_released = True
             assessment.save(update_fields=["results_released"])
@@ -406,6 +432,7 @@ def student_assessments(request):
     assessments = Assessment.objects.filter(
         student_class=student.student_class,
         is_published=True,
+        assessment_type=Assessment.AssessmentType.ASSIGNMENT,
     ).select_related(
         "subject",
         "teacher",
@@ -450,6 +477,7 @@ def student_assessment_instructions(request, assessment_id):
         id=assessment_id,
         student_class=student.student_class,
         is_published=True,
+        assessment_type=Assessment.AssessmentType.ASSIGNMENT,
     ).select_related(
         "subject",
         "teacher",
@@ -523,6 +551,7 @@ def student_test(request, assessment_id):
         id=assessment_id,
         student_class=student.student_class,
         is_published=True,
+        assessment_type=Assessment.AssessmentType.ASSIGNMENT,
     ).first()
 
     if not assessment:
@@ -1112,7 +1141,8 @@ def student_submit(request, assessment_id):
 
     assessment = Assessment.objects.filter(
         id=assessment_id,
-        student_class=student.student_class
+        student_class=student.student_class,
+        assessment_type=Assessment.AssessmentType.ASSIGNMENT,
     ).first()
 
     if not assessment:
@@ -1495,7 +1525,8 @@ def student_result(request, assessment_id):
 
     assessment = Assessment.objects.filter(
         id=assessment_id,
-        student_class=student.student_class
+        student_class=student.student_class,
+        assessment_type=Assessment.AssessmentType.ASSIGNMENT,
     ).first()
 
     if not assessment:

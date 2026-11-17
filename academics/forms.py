@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from accounts.models import StudentProfile
 
-from .models import Class, DoubtReply, DoubtThread, LeaveApplication, Subject, TeachingAssignment
+from .models import Class, DoubtReply, DoubtThread, LeaveApplication, LeaveRequest, Subject, TeachingAssignment
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -231,6 +231,11 @@ class LeaveApplicationForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["leave_type"].choices = [
+            choice
+            for choice in self.fields["leave_type"].choices
+            if choice[0] != LeaveApplication.LeaveType.OFFICIAL
+        ]
         self.fields["start_date"].input_formats = ["%Y-%m-%d"]
         self.fields["end_date"].input_formats = ["%Y-%m-%d"]
 
@@ -255,4 +260,36 @@ class LeaveApplicationForm(forms.ModelForm):
             if item.size > self.MAX_ATTACHMENT_SIZE:
                 raise forms.ValidationError("Each supporting file must be 5 MB or smaller.")
         return uploaded
+
+
+class TeacherLeaveRequestForm(forms.ModelForm):
+    reason = forms.ChoiceField(
+        choices=(
+            ("", "Select a reason"),
+            ("Sick Leave", "Sick Leave"),
+            ("Casual / Personal Leave", "Casual / Personal Leave"),
+            ("Emergency", "Emergency"),
+        ),
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Reason for leave",
+    )
+
+    class Meta:
+        model = LeaveRequest
+        fields = ("start_date", "end_date", "reason")
+        widgets = {
+            "start_date": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"},
+                format="%Y-%m-%d",
+            ),
+            "end_date": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"},
+                format="%Y-%m-%d",
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["start_date"].input_formats = ["%Y-%m-%d"]
+        self.fields["end_date"].input_formats = ["%Y-%m-%d"]
 

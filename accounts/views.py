@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -23,6 +25,8 @@ from academics.models import (
     Subject,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -39,6 +43,12 @@ def login_view(request):
         )
 
         if user is not None:
+            if user.is_staff or user.is_superuser:
+                return render(
+                    request,
+                    "accounts/login.html",
+                    {"error": "Admin accounts must sign in through the Django administration portal."},
+                )
             login(request, user)
             return redirect("dashboard")
 
@@ -304,6 +314,12 @@ def resource_upload(request):
         "student_class",
         "subject"
     )
+    past_uploads = Resource.objects.filter(
+        teacher=teacher
+    ).select_related(
+        "student_class",
+        "subject",
+    ).order_by("-created_at")
 
     # Allow the teacher to change the timing selection.
     if request.GET.get("change_timing") == "1":
@@ -405,15 +421,14 @@ def resource_upload(request):
             "Resource uploaded successfully."
         )
 
-        return redirect(
-            "resource_list"
-        )
+        return redirect("resource_upload")
 
     return render(
         request,
         "accounts/resource_upload.html",
         {
             "assignments": assignments,
+            "past_uploads": past_uploads,
         }
     )
 
@@ -421,10 +436,11 @@ def resource_upload(request):
 @login_required
 def resource_list(request):
     user = request.user
+    past_uploads = Resource.objects.none()
 
     if user.role == "TEACHER":
 
-        resources = Resource.objects.filter(
+        past_uploads = Resource.objects.filter(
             teacher=user.teacher_profile
         ).select_related(
             "student_class",
@@ -432,6 +448,7 @@ def resource_list(request):
         ).order_by(
             "-created_at"
         )
+        resources = past_uploads
 
         # ChromaDB status is read only for the teacher's own resource library.
         # A failure to open the local index should not make the page unavailable.
@@ -442,7 +459,7 @@ def resource_list(request):
         except Exception:
             vector_store = None
 
-        for resource in resources:
+        for resource in past_uploads:
             if vector_store is None:
                 resource.indexing_status = "unknown"
                 continue
@@ -489,6 +506,7 @@ def resource_list(request):
         "accounts/resource_list.html",
         {
             "resources": resources,
+            "past_uploads": past_uploads,
         }
     )
 
@@ -520,6 +538,44 @@ def teacher_resource_detail(request, resource_id):
         request,
         "accounts/resource_detail.html",
         {"resource": resource, "indexing_status": indexing_status},
+    )
+
+
+@login_required
+def student_resource_detail(request, resource_id):
+    if request.user.role != "STUDENT":
+        return HttpResponseForbidden("Student access is required.")
+
+    student = getattr(request.user, "student_profile", None)
+    if student is None or student.student_class_id is None:
+        return HttpResponseForbidden("A student class is required to view this resource.")
+
+    resource = get_object_or_404(
+        Resource.objects.select_related("student_class", "subject", "teacher__user"),
+        pk=resource_id,
+        student_class_id=student.student_class_id,
+    )
+    filename = resource.file.name.lower() if resource.file else ""
+    is_pdf = filename.endswith(".pdf")
+    is_image = filename.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp"))
+
+    try:
+        from ai_suggestions.services.vector_store import StudyPodVectorStore
+
+        indexed = StudyPodVectorStore().is_resource_indexed(resource.pk)
+        indexing_status = "indexed" if indexed else "not_indexed"
+    except Exception:
+        indexing_status = "unknown"
+
+    return render(
+        request,
+        "accounts/student_resource_detail.html",
+        {
+            "resource": resource,
+            "is_pdf": is_pdf,
+            "is_image": is_image,
+            "indexing_status": indexing_status,
+        },
     )
 
 
@@ -556,9 +612,22 @@ def teacher_resource_reindex(request, resource_id):
                 "title": resource.title,
             },
         )
-        messages.success(request, f"Resource re-indexed successfully ({chunks} chunks).")
+        if chunks:
+            messages.success(request, f"Resource is ready for AI search ({chunks} text sections prepared).")
+        else:
+            messages.warning(
+                request,
+                "No readable text was found in this file. Check that it contains selectable text, then try again.",
+            )
+    except ValueError as exc:
+        logger.warning("Resource %s could not be prepared for AI search: %s", resource.pk, exc)
+        messages.error(request, str(exc))
     except Exception:
-        messages.error(request, "Could not re-index this resource. Check the file and AI index configuration.")
+        logger.exception("Could not prepare resource %s for AI search.", resource.pk)
+        messages.error(
+            request,
+            "Could not prepare this resource for AI search. Check that the file is readable and AI services are installed.",
+        )
 
     return redirect("teacher_resource_detail", resource_id=resource.pk)
 
@@ -592,12 +661,25 @@ def teacher_resource_delete(request, resource_id):
 
 
 @login_required
-def create_assessment(request):
+def create_assessment(request, workflow_type=None):
 
     if request.user.role != "TEACHER":
         return redirect("dashboard")
 
     teacher = request.user.teacher_profile
+
+    if workflow_type is None:
+        if request.method == "POST":
+            request.session.pop("assessment_timing", None)
+            selected_type = request.POST.get("assessment_type")
+            route_name = {
+                "ASSIGNMENT": "create_assignment",
+                "TEST": "create_test",
+            }.get(selected_type)
+            if route_name:
+                return redirect(route_name)
+            messages.error(request, "Choose Assignment or Test to continue.")
+        return render(request, "accounts/assessment_type_choice.html")
 
     assignments = TeachingAssignment.objects.filter(
         teacher=teacher
@@ -605,6 +687,52 @@ def create_assessment(request):
         "student_class",
         "subject"
     )
+
+    if workflow_type == "TEST":
+        if request.method == "POST":
+            title = (request.POST.get("title") or "").strip()
+            student_class_id = request.POST.get("student_class")
+            subject_id = request.POST.get("subject")
+            try:
+                total_marks = int(request.POST.get("total_marks", ""))
+                if total_marks < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                total_marks = None
+
+            valid_assignment = assignments.filter(
+                student_class_id=student_class_id,
+                subject_id=subject_id,
+            ).exists()
+            if not title or not valid_assignment or total_marks is None:
+                messages.error(
+                    request,
+                    "Enter a title, choose a class and subject you teach, and set total marks above zero.",
+                )
+                return render(
+                    request,
+                    "accounts/create_test_assessment.html",
+                    {"assignments": assignments},
+                )
+
+            assessment = Assessment.objects.create(
+                title=title,
+                teacher=teacher,
+                student_class_id=student_class_id,
+                subject_id=subject_id,
+                assessment_type=Assessment.AssessmentType.TEST,
+                total_marks=total_marks,
+                workflow_status=Assessment.WorkflowStatus.DRAFT,
+                is_published=False,
+            )
+            messages.success(request, "Test draft created. Add its questions below.")
+            return redirect("question_create", assessment_id=assessment.id)
+
+        return render(
+            request,
+            "accounts/create_test_assessment.html",
+            {"assignments": assignments},
+        )
 
     # -------------------------------------------------
     # Stage 1:
@@ -628,7 +756,7 @@ def create_assessment(request):
                 "Please select a valid timing option."
             )
 
-            return redirect("create_assessment")
+            return redirect("create_assignment")
 
         duration_hours = 0
         duration_minutes = 0
@@ -663,7 +791,7 @@ def create_assessment(request):
                     "Please enter a time limit for the entire test."
                 )
 
-                return redirect("create_assessment")
+                return redirect("create_assignment")
 
             if duration_minutes > 59:
 
@@ -672,7 +800,7 @@ def create_assessment(request):
                     "Minutes must be between 0 and 59."
                 )
 
-                return redirect("create_assessment")
+                return redirect("create_assignment")
 
         # Store timing information temporarily.
         request.session["assessment_timing"] = {
@@ -681,7 +809,7 @@ def create_assessment(request):
             "duration_minutes": duration_minutes,
         }
 
-        return redirect("create_assessment")
+        return redirect("create_assignment")
 
 
     # -------------------------------------------------
@@ -702,7 +830,7 @@ def create_assessment(request):
                 "Please select the test timing first."
             )
 
-            return redirect("create_assessment")
+            return redirect("create_assignment")
 
         title = request.POST.get("title")
 
@@ -718,13 +846,13 @@ def create_assessment(request):
             "subject"
         )
 
-        assessment_type = request.POST.get(
-            "assessment_type"
-        )
-
-        total_marks = request.POST.get(
-            "total_marks"
-        )
+        try:
+            total_marks = int(request.POST.get("total_marks", ""))
+            if total_marks < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            messages.error(request, "Total marks must be a positive whole number.")
+            return redirect("create_assignment")
 
         available_from = request.POST.get(
             "available_from"
@@ -740,7 +868,7 @@ def create_assessment(request):
                 raise ValueError
         except (TypeError, ValueError):
             messages.error(request, "Maximum attempts must be zero (unlimited) or a positive whole number.")
-            return redirect("create_assessment")
+            return redirect("create_assignment")
 
         try:
             passmark_percentage = float(request.POST.get("passmark_percentage", "40"))
@@ -748,22 +876,12 @@ def create_assessment(request):
                 raise ValueError
         except (TypeError, ValueError):
             messages.error(request, "Passmark must be between 0 and 100 percent.")
-            return redirect("create_assessment")
-
-        access_code = (request.POST.get("access_code") or "").strip()
-        if len(access_code) > 20:
-            messages.error(request, "Access code must be 20 characters or fewer.")
-            return redirect("create_assessment")
-
-        if assessment_type not in dict(Assessment.AssessmentType.choices):
-            messages.error(request, "Please select a valid assessment type.")
-            return redirect("create_assessment")
+            return redirect("create_assignment")
 
         if not all([
             title,
             student_class_id,
             subject_id,
-            assessment_type,
             total_marks,
         ]):
 
@@ -772,7 +890,7 @@ def create_assessment(request):
                 "Please fill in all required fields."
             )
 
-            return redirect("create_assessment")
+            return redirect("create_assignment")
 
 
         # -------------------------------------------------
@@ -791,7 +909,7 @@ def create_assessment(request):
                 "You are not assigned to this class and subject."
             )
 
-            return redirect("create_assessment")
+            return redirect("create_assignment")
 
 
         # -------------------------------------------------
@@ -804,8 +922,10 @@ def create_assessment(request):
             teacher=teacher,
             student_class_id=student_class_id,
             subject_id=subject_id,
-            assessment_type=assessment_type,
+            assessment_type=Assessment.AssessmentType.ASSIGNMENT,
             total_marks=total_marks,
+            workflow_status=Assessment.WorkflowStatus.DRAFT,
+            is_published=False,
 
             timing_mode=timing_data["timing_mode"],
 
@@ -823,7 +943,7 @@ def create_assessment(request):
             shuffle_questions=request.POST.get("shuffle_questions") == "on",
             show_results_immediately=request.POST.get("show_results_immediately", "on") == "on",
             passmark_percentage=passmark_percentage,
-            access_code=access_code or None,
+            access_code=None,
             instructions=(request.POST.get("instructions") or "").strip(),
         )
 

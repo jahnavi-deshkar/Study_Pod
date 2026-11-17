@@ -15,8 +15,8 @@ from django.utils import timezone
 from accounts.models import StudentProfile
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
-from .forms import AttendanceSelectionForm, DoubtInboxFilterForm, DoubtReplyForm, DoubtThreadForm, LeaveApplicationForm
-from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, LeaveApplication, LeaveAttachment, Subject, TeachingAssignment, Timetable
+from .forms import AttendanceSelectionForm, DoubtInboxFilterForm, DoubtReplyForm, DoubtThreadForm, LeaveApplicationForm, TeacherLeaveRequestForm
+from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, LeaveApplication, LeaveAttachment, LeaveRequest, Subject, TeachingAssignment, Timetable
 
 
 WEEKDAYS = tuple(Timetable.DayOfWeek.choices)
@@ -93,6 +93,33 @@ def teacher_leave_page(request):
         applications = LeaveApplication.objects.select_related("student__user", "student_class").all()
     applications = applications.prefetch_related("attachments")
     return render(request, "academics/teacher_leave.html", {"applications": applications})
+
+
+@login_required
+def teacher_leave_request_page(request):
+    if request.user.role != "TEACHER":
+        return HttpResponseForbidden("Teacher access is required.")
+
+    if request.method == "POST":
+        form = TeacherLeaveRequestForm(request.POST)
+        if form.is_valid():
+            leave_request = form.save(commit=False)
+            leave_request.applicant = request.user
+            leave_request.role = LeaveRequest.Role.TEACHER
+            leave_request.save()
+            messages.success(request, "Your leave request was sent to Admin for review.")
+            return redirect("teacher_leave_request")
+    else:
+        form = TeacherLeaveRequestForm()
+
+    requests = LeaveRequest.objects.filter(
+        applicant=request.user,
+        role=LeaveRequest.Role.TEACHER,
+    )
+    return render(request, "academics/teacher_leave_request.html", {
+        "form": form,
+        "requests": requests,
+    })
 
 
 @login_required

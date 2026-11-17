@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.core.validators import FileExtensionValidator
 from .storage import PrivateDoubtAttachmentStorage
@@ -202,6 +204,11 @@ class Resource(models.Model):
 
 class Assessment(models.Model):
 
+    class WorkflowStatus(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        PENDING_ADMIN = "PENDING_ADMIN", "Pending Admin Review"
+        PUBLISHED = "PUBLISHED", "Published"
+
     class AssessmentType(models.TextChoices):
         TEST = "TEST", "Test"
         ASSIGNMENT = "ASSIGNMENT", "Assignment"
@@ -239,6 +246,12 @@ class Assessment(models.Model):
     )
 
     total_marks = models.PositiveIntegerField()
+
+    workflow_status = models.CharField(
+        max_length=20,
+        choices=WorkflowStatus.choices,
+        default=WorkflowStatus.DRAFT,
+    )
 
     is_published = models.BooleanField(default=False)
 
@@ -436,6 +449,49 @@ class LeaveApplication(models.Model):
 
     def __str__(self):
         return f"{self.student} — {self.start_date} to {self.end_date}"
+
+
+class LeaveRequest(models.Model):
+    class Role(models.TextChoices):
+        STUDENT = "STUDENT", "Student"
+        TEACHER = "TEACHER", "Teacher"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    applicant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="leave_requests",
+    )
+    role = models.CharField(max_length=8, choices=Role.choices)
+    reason = models.TextField()
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(
+        max_length=8,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="leave_request_end_on_or_after_start",
+            ),
+        ]
+
+    def clean(self):
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            raise ValidationError({"end_date": "End date must be on or after start date."})
+
+    def __str__(self):
+        return f"{self.get_role_display()} leave — {self.applicant} — {self.start_date}"
 
 
 class LeaveAttachment(models.Model):

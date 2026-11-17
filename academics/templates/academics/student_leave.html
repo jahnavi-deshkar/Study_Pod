@@ -9,9 +9,23 @@
         <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Pending applications</div><div class="display-6 text-warning">{{ pending_count }}</div></div></div></div>
         <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Rejected / action required</div><div class="display-6 text-danger">{{ rejected_count }}</div></div></div></div>
     </div>
-    <div id="leaveFormMessage"></div>
-    <div class="card shadow-sm mb-4"><div class="card-body">
-        <h2 class="h5">New leave application</h2>
+    <div id="leaveFormMessage" aria-live="polite"></div>
+    <div class="row g-4 align-items-start">
+    <section class="col-lg-7 order-lg-1" aria-labelledby="leaveHistoryHeading">
+    <div class="card shadow-sm h-100"><div class="card-body">
+        <h2 id="leaveHistoryHeading" class="h5 mb-3">Application history</h2>
+        {% if applications %}<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Date range</th><th>Duration</th><th>Type</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>
+        {% for application in applications %}<tr>
+            <td>{{ application.start_date|date:"d M Y" }}{% if application.end_date != application.start_date %} – {{ application.end_date|date:"d M Y" }}{% endif %}</td>
+            <td>{{ application.total_days }} day{{ application.total_days|pluralize }}</td><td>{{ application.get_leave_type_display }}</td><td>{{ application.created_at|date:"d M Y" }}</td>
+            <td>{% if application.status == "APPROVED" %}<span class="badge text-bg-success">Approved</span>{% elif application.status == "REJECTED" %}<span class="badge text-bg-danger">Rejected</span>{% elif application.status == "CANCELLED" %}<span class="badge text-bg-secondary">Cancelled</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}</td>
+            <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary view-leave" data-leave-id="{{ application.pk }}" data-bs-toggle="modal" data-bs-target="#leaveDetailsModal">Details</button> {% if application.status == "PENDING" %}<button class="btn btn-sm btn-outline-danger cancel-leave" data-cancel-url="{% url 'leave_cancel_api' application.pk %}">Cancel</button>{% endif %}</td>
+        </tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">You have not submitted a leave application yet.</p>{% endif %}
+    </div></div>
+    </section>
+    <section class="col-lg-5 order-lg-2" aria-labelledby="leaveFormHeading">
+    <div class="card shadow-sm"><div class="card-body">
+        <h2 id="leaveFormHeading" class="h5">New leave application</h2>
         <form id="leaveApplicationForm" method="post" enctype="multipart/form-data" action="{% url 'leave_apply_api' %}">
             {% csrf_token %}<div class="row g-3">
                 <div class="col-md-6"><label class="form-label" for="{{ leave_form.leave_type.id_for_label }}">Leave type</label>{{ leave_form.leave_type }}</div>
@@ -25,15 +39,8 @@
             </div>
         </form>
     </div></div>
-    <div class="card shadow-sm"><div class="card-body"><h2 class="h5 mb-3">Application history</h2>
-        {% if applications %}<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Date range</th><th>Duration</th><th>Type</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>
-        {% for application in applications %}<tr>
-            <td>{{ application.start_date|date:"d M Y" }}{% if application.end_date != application.start_date %} – {{ application.end_date|date:"d M Y" }}{% endif %}</td>
-            <td>{{ application.total_days }} day{{ application.total_days|pluralize }}</td><td>{{ application.get_leave_type_display }}</td><td>{{ application.created_at|date:"d M Y" }}</td>
-            <td>{% if application.status == "APPROVED" %}<span class="badge text-bg-success">Approved</span>{% elif application.status == "REJECTED" %}<span class="badge text-bg-danger">Rejected</span>{% elif application.status == "CANCELLED" %}<span class="badge text-bg-secondary">Cancelled</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}</td>
-            <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary view-leave" data-leave-id="{{ application.pk }}" data-bs-toggle="modal" data-bs-target="#leaveDetailsModal">Details</button> {% if application.status == "PENDING" %}<button class="btn btn-sm btn-outline-danger cancel-leave" data-cancel-url="{% url 'leave_cancel_api' application.pk %}">Cancel</button>{% endif %}</td>
-        </tr>{% endfor %}</tbody></table></div>{% else %}<p class="text-muted">You have not submitted a leave application yet.</p>{% endif %}
-    </div></div>
+    </section>
+    </div>
 </div>
 <div class="modal fade" id="leaveDetailsModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Leave application details</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body" id="leaveDetailsBody">Loading…</div></div></div></div>
 <script>

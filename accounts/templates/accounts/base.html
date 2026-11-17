@@ -30,8 +30,15 @@
         .navbar a:not(.btn):not(.navbar-brand) { color: #fff; }
         .text-muted { color: var(--sp-muted) !important; }
     </style>
+    {% if user.is_authenticated and user.role == "STUDENT" or user.is_authenticated and user.role == "TEACHER" or user.is_authenticated and user.role == "PARENT" %}
+        {% include "accounts/partials/student_portal_styles.html" %}
+    {% endif %}
 </head>
-<body class="bg-light">
+<body class="{% if user.is_authenticated and user.role == 'STUDENT' %}student-portal{% elif user.is_authenticated and user.role == 'TEACHER' or user.is_authenticated and user.role == 'PARENT' %}teacher-parent-portal{% else %}bg-light{% endif %}">
+    {% block navigation %}
+    {% if user.is_authenticated and user.role == "STUDENT" or user.is_authenticated and user.role == "TEACHER" or user.is_authenticated and user.role == "PARENT" %}
+        {% include "accounts/partials/student_portal_header.html" %}
+    {% else %}
     <nav class="navbar navbar-dark bg-dark">
         <div class="container d-flex justify-content-between">
             {% if user.is_authenticated %}
@@ -45,6 +52,8 @@
             {% endif %}
         </div>
     </nav>
+    {% endif %}
+    {% endblock %}
 
     <main class="container py-5">
         {% if messages %}

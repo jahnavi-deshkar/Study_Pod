@@ -1,0 +1,82 @@
+{% extends "accounts/base.html" %}
+{% block title %}Request Leave | StudyPod{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Request Leave</h1>
+        <p class="text-muted mb-0">Submit a leave request for Admin review.</p>
+    </div>
+    <a href="{% url 'teacher_leave_page' %}" class="btn btn-outline-secondary">
+        Review Student Leave
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">New Request</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% for error in field.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                        <div class="text-danger small mb-3">{{ error }}</div>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-primary">Send to Admin</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">My Requests</h2>
+                {% if requests %}
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Dates</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for leave_request in requests %}
+                                    <tr>
+                                        <td>{{ leave_request.start_date|date:"d M Y" }} – {{ leave_request.end_date|date:"d M Y" }}</td>
+                                        <td>{{ leave_request.reason|truncatechars:100 }}</td>
+                                        <td>
+                                            {% if leave_request.status == "PENDING" %}
+                                                <span class="badge text-bg-warning">Pending</span>
+                                            {% elif leave_request.status == "APPROVED" %}
+                                                <span class="badge text-bg-success">Approved</span>
+                                            {% else %}
+                                                <span class="badge text-bg-danger">Rejected</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ leave_request.created_at|date:"d M Y, H:i" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">You have not submitted any leave requests.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -15,7 +15,7 @@ from accounts.models import ParentProfile, StudentProfile, TeacherProfile, User
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
 from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, Resource, Subject, TeachingAssignment, Timetable
-from .utils.dsp_normalizer import normalize_batch, normalize_name, normalize_roll
+from .utils.dsp_normalizer import normalize_batch, normalize_name, normalize_roll, parse_score
 
 
 class DSPRosterImportTests(TestCase):
@@ -57,6 +57,108 @@ class DSPRosterImportTests(TestCase):
         self.assertEqual(StudentProfile.objects.get(roll_number="M1").parent.user.username, "parent1")
         self.assertEqual(StudentProfile.objects.get(roll_number="E49").parent.user.username, "parent_e49")
         self.assertEqual(Timetable.objects.filter(student_class__section__in=("M", "E")).count(), 12)
+
+
+class DSPMarksImportTests(TestCase):
+    def setUp(self):
+        self.teacher_user = User.objects.create_user(
+            username="teacher1", password="pw", role=User.Role.TEACHER
+        )
+        self.teacher = TeacherProfile.objects.create(user=self.teacher_user, employee_id="DSP-MARKS-T")
+        self.morning = Class.objects.create(name="11", section="M", academic_year="2025-26")
+        Class.objects.create(name="11", section="E", academic_year="2025-26")
+        for name, code in (
+            ("Algebra & Logic", "DSP-ALG"), ("Trigonometry & 2D Geometry", "DSP-TRIG"),
+            ("Vectors & 3D Geometry", "DSP-VECT"), ("Calculus", "DSP-CALC"),
+            ("Probability & Statistics", "DSP-PROB"), ("Full Syllabus Maths Mocks", "DSP-MOCK"),
+        ):
+            Subject.objects.create(name=name, code=code)
+        self.student_user = User.objects.create_user(
+            username="m1", password="pw", role=User.Role.STUDENT
+        )
+        StudentProfile.objects.create(
+            user=self.student_user, roll_number="M1", batch="Morning Batch", student_class=self.morning
+        )
+
+    def test_parse_score_and_absence_values(self):
+        self.assertEqual(parse_score("94/100"), (94.0, "PRESENT"))
+        self.assertEqual(parse_score("68/100"), (68.0, "PRESENT"))
+        self.assertEqual(parse_score("AB"), (None, "ABSENT"))
+        self.assertEqual(parse_score("Absent"), (None, "ABSENT"))
+        self.assertEqual(parse_score("-"), (None, "ABSENT"))
+        self.assertEqual(parse_score(None), (None, "ABSENT"))
+
+    @skipUnless(importlib.util.find_spec("openpyxl"), "openpyxl is required for XLSX import tests")
+    def test_marks_import_is_idempotent(self):
+        from openpyxl import Workbook
+
+        filenames = (
+            "Morning_Batch_11th_Tests_Rough.xlsx",
+            "Evening_11th_Marks_Sheet_Final(1).xlsx",
+            "12th_Part1_Maths_Both_Batches_Mixed.xlsx",
+            "Calculus_And_Prob_Tests_Dec2025.xlsx",
+            "Prelims_And_MHTCET_Grand_Mocks_2026.xlsx",
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            book = Workbook()
+            ws = book.active
+            ws.title = "Student_Admission_List"
+            ws.append(["Roll", "Full_Name"])
+            topics = book.create_sheet("Test_Topics_Rough_List")
+            topics.append(["Test_Code", "Topic", "Board_Or_CET", "Date_Conducted", "Max_Marks", "Paper_Setter_Notes"])
+            topics.append(["T01", "Algebra and Logic", "Board", date(2025, 6, 15), 100, "Algebra"])
+            book.save(root / "Student_Register_And_Rough_Test_Schedule.xlsx")
+
+            for filename in filenames:
+                wb = Workbook()
+                if filename == filenames[0]:
+                    sheet = wb.active
+                    sheet.title = "Morn_11th_Marks"
+                    sheet.append(["Roster"])
+                    sheet.append(["Marks"])
+                    sheet.append(["Roll_No", "Student Full Name", "Batch_Shift", "T1_Algebra"])
+                    sheet.append(["M1", "Student One", "Morning", 94])
+                elif filename == filenames[1]:
+                    sheet = wb.active
+                    sheet.title = "June_July_Tests"
+                    sheet.append(["Roll_No", "Student Full Name", "Batch_Shift", "15/06 Angle & Trig-I"])
+                    sheet.append(["E1", "Evening One", "Evening", 94])
+                    second = wb.create_sheet("Aug_Tests_Sheet2")
+                    second.append(["Cover"])
+                    second.append(["Cover"])
+                    second.append(["Roll_No", "Student Full Name", "Test_7"])
+                elif filename == filenames[2]:
+                    sheet = wb.active
+                    sheet.title = "Sheet1 (Part 1 Dump)"
+                    for _ in range(3):
+                        sheet.append(["Cover"])
+                    sheet.append(["Sr", "Batch_Name", "Roll", "Full_Name", "M/F", "T11 Algebra"])
+                elif filename == filenames[3]:
+                    sheet = wb.active
+                    sheet.title = "Diff_And_AOD"
+                    sheet.append(["Cover"])
+                    sheet.append(["Roll_No", "T20 Differential"])
+                    wb.create_sheet("Integration_DE_Combo").append(["Roll_No", "T22 Integration"])
+                    other = wb.create_sheet("Prob_Dist_T26")
+                    other.append(["Cover"])
+                    other.append(["Roll_No", "Marks_Out_Of_100 (T26 Probability)"])
+                else:
+                    sheet = wb.active
+                    sheet.title = "HSC_Prelims_P1_P2"
+                    sheet.append(["Roll_No", "T27 Prelim"])
+                    wb.create_sheet("CET_Mocks_Stacked_Log").append(["Exam_Code", "Student_Roll", "Score_Obtained"])
+                wb.save(root / filename)
+
+            call_command("import_dsp_marks", data_dir=directory, stdout=StringIO())
+            call_command("import_dsp_marks", data_dir=directory, stdout=StringIO())
+
+        self.assertEqual(Assessment.objects.filter(title__startswith="T01:").count(), 2)
+        attempts = AssessmentAttempt.objects.filter(student__roll_number="M1", status="EVALUATED")
+        self.assertEqual(attempts.count(), 1)
+        self.assertEqual(float(attempts.first().score), 94.0)
+        attendance = Attendance.objects.get(student__roll_number="M1")
+        self.assertEqual(attendance.status, Attendance.Status.PRESENT)
 
 
 class AttendanceWorkflowTests(TestCase):

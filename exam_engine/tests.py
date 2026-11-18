@@ -41,7 +41,9 @@ class AssessmentFlowTests(TestCase):
             "teacher": self.teacher,
             "student_class": self.student_class,
             "subject": self.subject,
-            "assessment_type": Assessment.AssessmentType.TEST,
+            # Student assessment routes currently expose ASSIGNMENT records;
+            # keep this shared fixture aligned with the route contract.
+            "assessment_type": Assessment.AssessmentType.ASSIGNMENT,
             "total_marks": 10,
             "is_published": True,
         }

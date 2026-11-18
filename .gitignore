@@ -18,5 +18,8 @@ env/
 # Local vector database
 chroma_db/
 
+# Private source spreadsheets
+raw_data/
+
 # macOS metadata
 .DS_Store

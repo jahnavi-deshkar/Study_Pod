@@ -1,5 +1,9 @@
 from io import StringIO
 from datetime import date
+import importlib.util
+from tempfile import TemporaryDirectory
+from pathlib import Path
+from unittest import skipUnless
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django.core.management import call_command
@@ -11,6 +15,48 @@ from accounts.models import ParentProfile, StudentProfile, TeacherProfile, User
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
 from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, Resource, Subject, TeachingAssignment, Timetable
+from .utils.dsp_normalizer import normalize_batch, normalize_name, normalize_roll
+
+
+class DSPRosterImportTests(TestCase):
+    def test_normalizers(self):
+        self.assertEqual(normalize_roll(" m-3 "), "M3")
+        self.assertEqual(normalize_roll("e-75"), "E75")
+        self.assertEqual(normalize_batch("Morn"), "Morning Batch")
+        self.assertEqual(normalize_batch("eve"), "Evening Batch")
+        self.assertEqual(normalize_name("Agarkar, Aditi"), "Aditi Agarkar")
+        self.assertEqual(normalize_name("TEJASWINI SOMAN"), "Tejaswini Soman")
+
+    @skipUnless(
+        importlib.util.find_spec("openpyxl"), "openpyxl is required for XLSX import tests"
+    )
+    def test_import_is_idempotent_and_links_demo_parents(self):
+        from openpyxl import Workbook
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "Student_Register_And_Rough_Test_Schedule.xlsx"
+            workbook = Workbook()
+            roster = workbook.active
+            roster.title = "Student_Admission_List"
+            roster.append(["Roll", "Full_Name"])
+            roster.append(["M1", "Sathe, Shruti"])
+            roster.append(["M8", "Sathe, Gaurav"])
+            roster.append(["E49", "Agarkar, Aditi"])
+            topics = workbook.create_sheet("Test_Topics_Rough_List")
+            topics.append(["Test_ID", "Topic"])
+            topics.append(["T01", "Algebra"])
+            workbook.save(path)
+
+            call_command("import_dsp_roster", data_dir=directory, stdout=StringIO())
+            call_command("import_dsp_roster", data_dir=directory, stdout=StringIO())
+
+        self.assertEqual(Class.objects.filter(section__in=("M", "E")).count(), 2)
+        self.assertEqual(Subject.objects.filter(code__startswith="DSP-").count(), 6)
+        self.assertEqual(StudentProfile.objects.filter(roll_number__in=("M1", "M8", "E49")).count(), 3)
+        self.assertEqual(User.objects.filter(username__in=("parent1", "parent_e49")).count(), 2)
+        self.assertEqual(StudentProfile.objects.get(roll_number="M1").parent.user.username, "parent1")
+        self.assertEqual(StudentProfile.objects.get(roll_number="E49").parent.user.username, "parent_e49")
+        self.assertEqual(Timetable.objects.filter(student_class__section__in=("M", "E")).count(), 12)
 
 
 class AttendanceWorkflowTests(TestCase):

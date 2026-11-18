@@ -36,7 +36,8 @@
     body.student-portal h6 { color: var(--student-ink); }
     body.student-portal a:not(.btn):not(.navbar-brand) { color: var(--student-primary); }
     body.student-portal .text-muted { color: var(--student-muted) !important; }
-    body.student-portal .student-nav {
+    body.student-portal .student-nav,
+    body.teacher-parent-portal .student-nav {
         height: 67px;
         min-height: 67px;
         padding: 0;
@@ -48,7 +49,8 @@
         border-top: 3px solid #303030;
         border-bottom: 1px solid var(--sp-border);
     }
-    body.student-portal .student-nav-inner {
+    body.student-portal .student-nav-inner,
+    body.teacher-parent-portal .student-nav-inner {
         width: min(1056px, calc(100% - 40px));
         height: 100%;
         margin: auto;
@@ -58,25 +60,39 @@
         justify-content: space-between;
         gap: 20px;
     }
-    body.student-portal .student-brand { display: flex; align-items: center; gap: 10px; color: var(--student-ink) !important; text-decoration: none; }
-    body.student-portal .student-brand-mark {
+    body.student-portal .student-brand,
+    body.teacher-parent-portal .student-brand { display: flex; align-items: center; gap: 10px; color: var(--student-ink) !important; text-decoration: none; }
+    body.student-portal .student-brand-mark,
+    body.teacher-parent-portal .student-brand-mark {
         width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; display: grid; place-items: center;
         color: #fff !important; background: linear-gradient(135deg, var(--student-primary), var(--student-primary-dark)) !important;
         font-size: 11px; font-weight: 850; letter-spacing: -.4px;
         box-shadow: 0 5px 13px rgba(200, 16, 46, .22);
     }
-    body.student-portal .student-brand-copy { display: grid; line-height: 1.1; }
-    body.student-portal .student-brand-copy strong { font-size: 15px; letter-spacing: -.35px; }
-    body.student-portal .student-brand-copy small { color: var(--student-muted); font-size: 8px; letter-spacing: 1.5px; font-weight: 750; margin-top: 3px; }
-    body.student-portal .student-nav-links { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
-    body.student-portal .student-nav-links > a:not(.student-nav-button) { color: #475166 !important; font-size: 10px; font-weight: 600; padding: 7px 8px; border-radius: 8px; text-decoration: none; }
-    body.student-portal .student-nav-links > a:not(.student-nav-button):hover { background: var(--student-primary-soft); color: var(--student-primary) !important; }
-    body.student-portal .student-user-chip { display: flex; align-items: center; gap: 7px; padding: 3px 8px 3px 4px; border: 1px solid var(--student-line); border-radius: 999px; font-size: 10px; font-weight: 650; white-space: nowrap; }
-    body.student-portal .student-avatar { width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; background: var(--student-primary-soft); color: var(--student-primary); font-size: 9px; font-weight: 800; }
-    body.student-portal .student-nav-button { border: 1px solid #e7b4bf; color: var(--student-primary) !important; background: #fff; border-radius: 7px; padding: 7px 10px; font-weight: 650; font-size: 10px; text-decoration: none; transition: .2s; }
-    body.student-portal .student-nav-button:hover { background: var(--student-primary); border-color: var(--student-primary); color: #fff !important; }
-    body.student-portal .student-nav-button.student-logout { display: inline-flex !important; align-items: center; justify-content: center; visibility: visible !important; opacity: 1 !important; background: var(--student-primary); color: #fff !important; border-color: var(--student-primary); }
-    body.student-portal .student-nav-button.student-logout:hover { background: var(--student-primary-dark); }
+    body.student-portal .student-brand-copy,
+    body.teacher-parent-portal .student-brand-copy { display: grid; line-height: 1.1; }
+    body.student-portal .student-brand-copy strong,
+    body.teacher-parent-portal .student-brand-copy strong { font-size: 15px; letter-spacing: -.35px; }
+    body.student-portal .student-brand-copy small,
+    body.teacher-parent-portal .student-brand-copy small { color: var(--student-muted); font-size: 8px; letter-spacing: 1.5px; font-weight: 750; margin-top: 3px; }
+    body.student-portal .student-nav-links,
+    body.teacher-parent-portal .student-nav-links { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+    body.student-portal .student-nav-links > a:not(.student-nav-button),
+    body.teacher-parent-portal .student-nav-links > a:not(.student-nav-button) { color: #475166 !important; font-size: 10px; font-weight: 600; padding: 7px 8px; border-radius: 8px; text-decoration: none; }
+    body.student-portal .student-nav-links > a:not(.student-nav-button):hover,
+    body.teacher-parent-portal .student-nav-links > a:not(.student-nav-button):hover { background: var(--student-primary-soft); color: var(--student-primary) !important; }
+    body.student-portal .student-user-chip,
+    body.teacher-parent-portal .student-user-chip { display: flex; align-items: center; gap: 7px; padding: 3px 8px 3px 4px; border: 1px solid var(--student-line); border-radius: 999px; font-size: 10px; font-weight: 650; white-space: nowrap; }
+    body.student-portal .student-avatar,
+    body.teacher-parent-portal .student-avatar { width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; background: var(--student-primary-soft); color: var(--student-primary); font-size: 9px; font-weight: 800; }
+    body.student-portal .student-nav-button,
+    body.teacher-parent-portal .student-nav-button { border: 1px solid #e7b4bf; color: var(--student-primary) !important; background: #fff; border-radius: 7px; padding: 7px 10px; font-weight: 650; font-size: 10px; text-decoration: none; transition: .2s; }
+    body.student-portal .student-nav-button:hover,
+    body.teacher-parent-portal .student-nav-button:hover { background: var(--student-primary); border-color: var(--student-primary); color: #fff !important; }
+    body.student-portal .student-nav-button.student-logout,
+    body.teacher-parent-portal .student-nav-button.student-logout { display: inline-flex !important; align-items: center; justify-content: center; visibility: visible !important; opacity: 1 !important; background: var(--student-primary); color: #fff !important; border-color: var(--student-primary); }
+    body.student-portal .student-nav-button.student-logout:hover,
+    body.teacher-parent-portal .student-nav-button.student-logout:hover { background: var(--student-primary-dark); }
     body.student-portal .card { background: #fff; border: 1px solid var(--student-line); border-radius: 16px; box-shadow: 0 12px 30px rgba(25, 34, 53, .07); }
     body.student-portal .card-header.bg-dark { background-color: var(--student-primary) !important; }
     body.student-portal .btn-primary { background-color: var(--student-primary); border-color: var(--student-primary); }
@@ -96,13 +112,18 @@
     body.student-portal .student-profile-page .form-control:focus { box-shadow: 0 0 0 .2rem rgba(200, 16, 46, .14); }
     body.student-portal .student-profile-page .avatar-preview { background: var(--student-primary-soft); }
     @media (max-width: 900px) {
-        body.student-portal .student-nav-inner { width: 94%; }
+        body.student-portal .student-nav-inner,
+        body.teacher-parent-portal .student-nav-inner { width: 94%; }
     }
     @media (max-width: 620px) {
-        body.student-portal .student-nav { height: auto; }
-        body.student-portal .student-nav-inner { align-items: flex-start; flex-direction: column; gap: 10px; padding: 10px 0; }
-        body.student-portal .student-nav-links { width: 100%; overflow-x: auto; gap: 7px; padding-bottom: 2px; }
-        body.student-portal .student-nav-links > a:not(.student-nav-button) { padding: 8px; white-space: nowrap; }
+        body.student-portal .student-nav,
+        body.teacher-parent-portal .student-nav { height: auto; }
+        body.student-portal .student-nav-inner,
+        body.teacher-parent-portal .student-nav-inner { align-items: flex-start; flex-direction: column; gap: 10px; padding: 10px 0; }
+        body.student-portal .student-nav-links,
+        body.teacher-parent-portal .student-nav-links { width: 100%; overflow-x: auto; gap: 7px; padding-bottom: 2px; }
+        body.student-portal .student-nav-links > a:not(.student-nav-button),
+        body.teacher-parent-portal .student-nav-links > a:not(.student-nav-button) { padding: 8px; white-space: nowrap; }
     }
 </style>
 <style>
@@ -131,7 +152,17 @@
     body.teacher-parent-portal h6 { color: var(--student-ink); }
     body.teacher-parent-portal a:not(.btn):not(.navbar-brand) { color: var(--student-primary); }
     body.teacher-parent-portal .text-muted { color: var(--student-muted) !important; }
-    body.teacher-parent-portal .portal-eyebrow { margin-bottom: .5rem; color: var(--student-primary); font-size: .68rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    body.teacher-parent-portal .portal-eyebrow { margin: 0 0 11px; color: var(--student-primary); font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+    body.teacher-parent-portal .portal-dashboard-heading { margin-bottom: 28px !important; }
+    body.teacher-parent-portal .portal-dashboard-welcome-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+    body.teacher-parent-portal .portal-dashboard-heading h1 { margin: 0; color: var(--student-ink); font-size: clamp(28px, 3vw, 37px); font-weight: 750; letter-spacing: -1.2px; line-height: 1.1; }
+    body.teacher-parent-portal .portal-dashboard-welcome { margin: 10px 0 0; color: var(--student-muted); font-size: 14px; }
+    body.teacher-parent-portal .portal-dashboard-welcome strong { color: var(--student-ink); }
+    body.teacher-parent-portal .portal-dashboard-accent { width: 62px; height: 3px; margin-top: 18px; border-radius: 9px; background: linear-gradient(90deg, var(--student-primary), #f28a9e); }
+    body.teacher-parent-portal .portal-dashboard-workspace { padding: 10px 14px; border: 1px solid var(--student-line); border-radius: 999px; background: #fff; box-shadow: 0 3px 12px rgba(25, 34, 53, .03); color: #596477; font-size: 12px; font-weight: 650; white-space: nowrap; }
+    @media (max-width: 620px) {
+        body.teacher-parent-portal .portal-dashboard-welcome-row { align-items: flex-start; flex-direction: column; }
+    }
     body.teacher-parent-portal .navbar.bg-dark { background: #fff !important; }
     body.teacher-parent-portal .card { background: #fff; border: 1px solid var(--student-line); border-radius: 16px; box-shadow: 0 10px 26px rgba(25, 34, 53, .06); }
     body.teacher-parent-portal .card-header.bg-dark { background-color: var(--student-primary) !important; }

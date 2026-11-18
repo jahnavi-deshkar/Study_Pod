@@ -6,15 +6,17 @@
 
     <!-- Page Heading -->
 
-    <div class="mb-4">
-
-        <div class="portal-eyebrow">DSP Academy · Parent Portal</div><h2>Parent Dashboard</h2>
-
-        <p class="text-muted">
-            Welcome, {{ request.user.get_full_name|default:request.user.username }}!
-        </p>
-
-    </div>
+    <section class="portal-dashboard-heading">
+        <div class="portal-dashboard-welcome-row">
+            <div>
+                <div class="portal-eyebrow">DSP Academy · Parent Portal</div>
+                <h1>Parent Dashboard</h1>
+                <p class="portal-dashboard-welcome">Welcome back, <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>. Here's your family’s StudyPod space at a glance.</p>
+                <div class="portal-dashboard-accent"></div>
+            </div>
+            <div class="portal-dashboard-workspace">Your StudyPod workspace</div>
+        </div>
+    </section>
 
 
     <!-- Dashboard Cards -->

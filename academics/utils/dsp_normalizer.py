@@ -1,4 +1,5 @@
 import re
+import math
 
 
 def normalize_roll(raw_roll):
@@ -23,3 +24,23 @@ def normalize_name(raw_name):
         last, first = (part.strip() for part in value.split(",", 1))
         value = f"{first} {last}".strip()
     return value.title()
+
+
+def parse_score(raw_val):
+    """Return ``(score, attendance_status)`` for DSP marks and absence cells."""
+    if raw_val is None:
+        return None, "ABSENT"
+    if isinstance(raw_val, float) and math.isnan(raw_val):
+        return None, "ABSENT"
+    value = str(raw_val).strip()
+    if not value or value.casefold() in {"-", "ab", "abs", "absent", "nan"}:
+        return None, "ABSENT"
+    if "/" in value:
+        value = value.split("/", 1)[0].strip()
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None, "ABSENT"
+    if not math.isfinite(score):
+        return None, "ABSENT"
+    return min(100.0, max(0.0, score)), "PRESENT"

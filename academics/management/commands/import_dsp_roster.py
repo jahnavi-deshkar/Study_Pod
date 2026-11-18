@@ -54,6 +54,7 @@ class Command(BaseCommand):
             raise CommandError("Workbook must contain Student_Admission_List and Test_Topics_Rough_List sheets.")
         students_rows = list(self._rows(workbook["Student_Admission_List"]))
         topic_rows = list(self._rows(workbook["Test_Topics_Rough_List"]))
+        workbook.close()
 
         # Read the syllabus sheet too, so a malformed or empty source cannot silently seed a roster.
         if not topic_rows:

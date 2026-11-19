@@ -1,139 +1,95 @@
 # Study_Pod
 
-Study_Pod is a Django school portal for teachers, students, and parents. It uses Django 6.1.1, a custom `accounts.User`, and SQLite by default.
+Study_Pod is a role-based Django learning portal built around a real coaching-academy workflow. Recruiters can explore teacher, student, and parent dashboards using the included demo database and study resources.
 
-## Architecture
+## Project overview
 
-- **`accounts`** manages authentication, role-based profiles, dashboards, notices, and assessment setup.
-- **`academics`** manages classes, subjects, teaching assignments, attendance, discussions, and performance analytics.
-- **`exam_engine`** manages assessment questions and options, attempt timing and restrictions, answer saving, automatic grading, and teacher evaluation of short answers.
-- **`study_pod`** contains project settings and root URL configuration.
+The project is split into focused Django apps:
 
-Students are associated with a class through `StudentProfile`. Teacher access to class and subject work is scoped through `TeachingAssignment`. Assessments and attempts are scoped to those profiles in their views.
+- **`accounts`** handles authentication, role profiles, dashboards, notices, and resource pages.
+- **`academics`** handles classes, subjects, teaching assignments, attendance, timetables, analytics, study resources, and student discussions.
+- **`exam_engine`** handles assessments, questions, attempts, answer capture, scoring, and evaluation.
+- **`ai_suggestions`** provides optional teacher and student study suggestions using local resource search and configured AI services.
 
-## Local Setup (PowerShell)
+Access is scoped by role and class: teachers work with assigned classes and subjects, students see their own class and progress, and parents have read-only access to linked children.
 
-Run these commands from the directory containing `manage.py`:
+## Real-world dataset scale
+
+The included SQLite demo database contains DSP Mathematics Academy data:
+
+- 2 batches, 6 Mathematics subjects, and 180 students
+- 30 tests (`T01`–`T30`) represented by 60 published batch assessments
+- 5,187 evaluated attempts and 5,400 imported attendance records
+- Notices, study resources, resolved and open student discussions, and teacher replies
+
+The six source Excel workbooks are intentionally excluded from Git in `raw_data/`. The pre-populated `db.sqlite3` and downloadable resources under `media/resources/` are included for immediate local exploration.
+
+## Recruiter demo logins
+
+| Role | Username | Password | Demo profile |
+| --- | --- | --- | --- |
+| Teacher (Faculty Admin) | `teacher1` | `password123` | D.S.P. Sir; class analytics, 60 assessments, attendance, timetable, notices, resources, and Q&A moderation |
+| Student (Morning Batch) | `m1` | `student123` | Shruti Sathe; 77.96% average across 28 attempts |
+| Student (Evening Batch) | `e49` | `student123` | Aditi Agarkar; 74.74% average across 27 attempts |
+| Parent (multi-child) | `parent1` | `password123` | Rajesh Sathe; switch between Shruti Sathe (`M1`) and Gaurav Sathe (`M8`) with read-only access |
+| Parent (Evening Batch) | `parent_e49` | `password123` | Suresh Agarkar; linked to Aditi Agarkar (`E49`) |
+
+These credentials are for this local demo database only. Replace them before using the application in a shared or deployed environment.
+
+## Quickstart (Windows PowerShell)
+
+Run from the repository directory:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install "Django==6.1.1" Pillow
+python -m pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_data
 python manage.py runserver
 ```
 
-Open <http://127.0.0.1:8000/login/>. The administration site is at <http://127.0.0.1:8000/admin/>. Create an administrator when needed:
+Open <http://127.0.0.1:8000/login/> and sign in with any account above. The included database and `media/resources/` files provide the demo data; the source spreadsheets are not required for normal browsing.
+
+## Useful commands
 
 ```powershell
-python manage.py createsuperuser
-```
-
-### Demo Accounts
-
-`seed_data` creates or refreshes these local development accounts, their profiles, a class, two subjects, teaching assignments, and a draft sample assessment:
-
-| Role | Username | Password |
-| --- | --- | --- |
-| Teacher | `Teacher1` | `Teacher@12345` |
-| Student | `Student1` | `Student@12345` |
-| Parent  | `Parent1` | `Parent@12345` |
-
-These predictable credentials are for local development only. Do not expose them or reuse them in a deployed environment. The sample assessment is a draft and has no questions until a teacher adds them.
-
-## Environment Configuration
-testing
-For convenience, local development defaults to `DEBUG=True`, a development-only secret key, and local allowed hosts. Configure these variables explicitly for deployment:
-
-| Variable | Purpose | Production example |
-| --- | --- | --- |
-| `SECRET_KEY` | Django signing and cryptographic key | A unique, randomly generated secret |
-| `DEBUG` | Enables/disables debug pages | `False` |
-| `ALLOWED_HOSTS` | Comma-separated hostnames accepted by Django | `portal.example.com,www.portal.example.com` |
-
-Generate a secret key with:
-
-```powershell
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
-
-Set the values in the deployment environment or PowerShell session, rather than committing secrets to source control:
-
-```powershell
-$env:SECRET_KEY = "paste-a-generated-secret-here"
-$env:DEBUG = "False"
-$env:ALLOWED_HOSTS = "portal.example.com,www.portal.example.com"
-```
-
-When `DEBUG=False`, Django refuses to start if `SECRET_KEY` is missing. Set `ALLOWED_HOSTS` to the exact public hostnames. Use a production WSGI/ASGI server and a correctly configured HTTPS reverse proxy; do not use `runserver` in production.
-
-Static files use `STATIC_ROOT = staticfiles/` and should be collected for deployment:
-
-```powershell
-python manage.py collectstatic --noinput
-```
-
-Uploaded files are stored under `MEDIA_ROOT = media/` and served at `MEDIA_URL = /media/` according to the deployment's media-storage configuration. Configure durable, backed-up storage and serve uploads through the web server or a dedicated object-storage service in production.
-
-SQLite is configured by default for local use. Configure a production database and backups separately before deploying a multi-user production instance.
-
-## Database Seeding
-
-The seed command is safe to run repeatedly and wraps its database updates in a transaction:
-
-```powershell
-python manage.py seed_data
-```
-
-It creates or refreshes the demo identities `teacher1`, `student1`, and `student2`, class `10-A` for academic year `2026-27`, Mathematics and Science, teacher assignments for both subjects, and a draft Mathematics assessment.
-
-## Tests and Checks
-
-Run the full test suite and Django system checks with:
-
-```powershell
+# Run the full test suite
 python manage.py test
+
+# Check Django configuration
 python manage.py check
-python manage.py makemigrations --check --dry-run
+
+# Rebuild the complete academy dataset from the six source workbooks in raw_data/
+python manage.py setup_dsp_demo
+
+# Use another workbook directory
+python manage.py setup_dsp_demo --data-dir "D:\path\to\raw_data"
 ```
 
-## Main URLs
+The data pipeline runs the roster, marks/attendance, and community imports in order. Each stage is safe to rerun. `raw_data/` is git-ignored because the source workbooks contain private student records.
 
-- `/login/`, `/dashboard/`, `/profile/`
-- `/academics/teacher/attendance/`, `/academics/student/attendance/`
-- `/academics/discussions/`
-- `/academics/student/leave/` and `/academics/teacher/leaves/`
-- `/academics/student/analytics/`, `/academics/teacher/analytics/`
-- `/exam/tests/` for teacher assessment management
-- `/exam/student/assessments/` for student assessments
-- `/admin/` for Django administration
+## AI and offline behavior
 
-## Student leave management
+Core dashboards and resource pages use the local database and files. They remain available when Hugging Face is unreachable; resource index status may show as unknown until the local embedding model is available. AI suggestions additionally require the embedding model and a configured `GROQ_API_KEY`.
 
-Students can submit and track leave applications at `/academics/student/leave/`. Applications can include PDF/PNG/JPG/JPEG support files (maximum 5 MB each) and can be shared as a copy in the linked parent's portal. Teachers review requests at `/academics/teacher/leaves/` for their assigned classes. Past dates are rejected; emergency retroactive leave can be enabled with `LEAVE_ALLOW_RETROACTIVE_EMERGENCY = True` in settings. Exact duplicate active date ranges are blocked.
+For local AI suggestions, put configuration in an untracked `.env` file beside `manage.py`:
 
-Session-authenticated API endpoints:
+```dotenv
+GROQ_API_KEY=your-key
+GROQ_MODEL=qwen/qwen3.8-27b
+```
 
-- `POST /api/student/leave/apply/` — multipart form data with `leave_type`, `start_date`, `end_date`, `reason`, optional `parent_acknowledgement=on`, and optional repeated `attachments` files.
-- `GET /api/student/leave/history/?status=PENDING&page=1` — paginated history (10 per page); `status` is optional.
-- `GET /api/student/leave/<id>/` — application details and review note.
-- `POST` or `DELETE /api/student/leave/<id>/cancel/` — cancel a pending application (CSRF protection applies to session requests).
-- `POST /api/teacher/leave/<id>/review/` — teacher review with `status=APPROVED` or `REJECTED` and optional `review_note`.
-- `GET /api/leave/attachments/<id>/` — permission-checked supporting document download.
+The local Chroma index is stored in `chroma_db/` and can be rebuilt by reindexing resources after the embedding model has been downloaded. Do not commit API keys or student source workbooks.
 
-The parent acknowledgement option displays the application copy in the linked parent's portal; it does not send email or push notifications.
+## Project URLs
 
+- `/login/` and `/dashboard/` — sign in and open the role-based dashboard
+- `/notices/`, `/resources/`, and `/academics/discussions/` — academy community and learning materials
+- `/academics/teacher/analytics/` and `/academics/student/analytics/` — progress views
+- `/academics/teacher/timetable/`, `/academics/student/timetable/`, and `/academics/parent/timetable/` — weekly schedules
+- `/exam/tests/` and `/exam/student/assessments/` — teacher assessment management and student assessments
+- `/admin/` — Django administration
 
+## Configuration and deployment
 
-## AI suggestions and local RAG
-
-The AI module indexes teacher PDF and TXT resources into a local ChromaDB store using Sentence Transformers, then uses Groq with Qwen for teacher question suggestions and student study recommendations. Resource indexing runs after a resource save; it currently runs synchronously in the web process after the database commit.
-
-Install project dependencies with `python -m pip install -r requirements.txt`. Add `GROQ_API_KEY` and optionally `GROQ_MODEL=qwen/qwen3.8-27b` to the local `.env` file beside `manage.py`. The embedding model is downloaded on first use if it is not already cached. Chroma data is stored in `chroma_db/`.
-
-AI endpoints:
-
-- `POST /api/ai/teacher/questions/`
-- `POST /api/ai/student/recommendations/`
+Local development defaults to `DEBUG=True` with a development-only secret key. For deployment, set `SECRET_KEY`, `DEBUG=False`, and an explicit comma-separated `ALLOWED_HOSTS`. Use a production WSGI/ASGI server, HTTPS, durable media storage, and a production database. Do not deploy with the demo credentials or use Django's `runserver` as a production server.

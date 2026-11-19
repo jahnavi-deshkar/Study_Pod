@@ -5,7 +5,6 @@ __pycache__/
 *.py[cod]
 
 # Local database and environments
-db.sqlite3
 venv/
 env/
 .venv/

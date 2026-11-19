@@ -1,0 +1,12 @@
+DSP Academy | Compound Angle Formula Sheet
+
+sin(A+B) = sin A cos B + cos A sin B
+sin(A-B) = sin A cos B - cos A sin B
+cos(A+B) = cos A cos B - sin A sin B
+cos(A-B) = cos A cos B + sin A sin B
+tan(A+B) = (tan A + tan B) / (1 - tan A tan B)
+tan(A-B) = (tan A - tan B) / (1 + tan A tan B)
+
+Double angles: sin 2A = 2 sin A cos A; cos 2A = cos^2 A - sin^2 A.
+Product-to-sum: 2 sin A cos B = sin(A+B) + sin(A-B).
+Before using an identity, check the quadrant and the signs of each ratio.

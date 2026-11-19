@@ -1,5 +1,7 @@
 from pathlib import Path
 import re
+import shutil
+import zipfile
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
@@ -42,7 +44,10 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        path = Path(options["data_dir"]) / WORKBOOK
+        data_dir = Path(options["data_dir"])
+        path = data_dir / WORKBOOK
+        if not path.is_file():
+            self._extract_xlsx_fallbacks(data_dir)
         if not path.is_file():
             raise CommandError(f"Roster workbook not found: {path}")
         try:
@@ -133,6 +138,25 @@ class Command(BaseCommand):
         iterator = sheet.iter_rows(values_only=True)
         headers = next(iterator, ())
         return [dict(zip(headers, values)) for values in iterator if any(v is not None for v in values)]
+
+    @staticmethod
+    def _extract_xlsx_fallbacks(data_dir):
+        candidates = sorted(data_dir.glob("*.zip")) + sorted(
+            data_dir.glob("DSP*Mathematics*Academy*CoachingDataSet.xlsx")
+        )
+        for archive_path in candidates:
+            if not archive_path.is_file() or not zipfile.is_zipfile(archive_path):
+                continue
+            with zipfile.ZipFile(archive_path) as archive:
+                for member in archive.infolist():
+                    filename = Path(member.filename).name
+                    if member.is_dir() or not filename.lower().endswith(".xlsx"):
+                        continue
+                    destination = data_dir / filename
+                    if destination.exists():
+                        continue
+                    with archive.open(member) as source, destination.open("wb") as target:
+                        shutil.copyfileobj(source, target)
 
     @staticmethod
     def _parent(User, username, first_name, last_name, rolls):

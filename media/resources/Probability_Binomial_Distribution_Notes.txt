@@ -1,0 +1,11 @@
+DSP Academy | Probability and Binomial Distribution
+
+For independent trials with success probability p and q=1-p, if X is the
+number of successes in n trials, then X ~ Binomial(n,p).
+P(X=r) = C(n,r) p^r q^(n-r), r=0,1,...,n.
+Mean E[X] = np; variance Var(X) = npq; standard deviation = sqrt(npq).
+
+Useful counting: C(n,r) = n! / (r!(n-r)!).
+Check that probabilities are between 0 and 1 and their complete distribution
+sums to 1. For an event described as “at least one”, use the complement:
+P(X>=1) = 1 - P(X=0) = 1 - q^n.

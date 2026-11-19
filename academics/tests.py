@@ -1,20 +1,22 @@
 from io import StringIO
+from io import BytesIO
 from datetime import date
 import importlib.util
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest import skipUnless
+import zipfile
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import ParentProfile, StudentProfile, TeacherProfile, User
 from exam_engine.models import AssessmentAttempt, Question, StudentAnswer
 
-from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, Resource, Subject, TeachingAssignment, Timetable
+from .models import Assessment, Attendance, Class, DoubtAttachment, DoubtReply, DoubtThread, Notice, Resource, Subject, TeachingAssignment, Timetable
 from .utils.dsp_normalizer import normalize_batch, normalize_name, normalize_roll, parse_score
 
 
@@ -57,6 +59,30 @@ class DSPRosterImportTests(TestCase):
         self.assertEqual(StudentProfile.objects.get(roll_number="M1").parent.user.username, "parent1")
         self.assertEqual(StudentProfile.objects.get(roll_number="E49").parent.user.username, "parent_e49")
         self.assertEqual(Timetable.objects.filter(student_class__section__in=("M", "E")).count(), 12)
+
+    @skipUnless(importlib.util.find_spec("openpyxl"), "openpyxl is required for XLSX import tests")
+    def test_roster_is_extracted_from_xlsx_named_archive(self):
+        from openpyxl import Workbook
+
+        with TemporaryDirectory() as directory:
+            payload = BytesIO()
+            workbook = Workbook()
+            roster = workbook.active
+            roster.title = "Student_Admission_List"
+            roster.append(["Roll_Code", "Full_Name"])
+            roster.append(["M1", "Sathe, Shruti"])
+            topics = workbook.create_sheet("Test_Topics_Rough_List")
+            topics.append(["Code", "Topic"])
+            topics.append(["T01", "Algebra"])
+            workbook.save(payload)
+            archive_path = Path(directory) / "DSP’s Mathematics AcademyCoachingDataSet.xlsx"
+            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("workbooks/Student_Register_And_Rough_Test_Schedule.xlsx", payload.getvalue())
+
+            call_command("import_dsp_roster", data_dir=directory, stdout=StringIO())
+
+            self.assertTrue((Path(directory) / "Student_Register_And_Rough_Test_Schedule.xlsx").exists())
+            self.assertTrue(StudentProfile.objects.filter(roll_number="M1").exists())
 
 
 class DSPMarksImportTests(TestCase):
@@ -159,6 +185,67 @@ class DSPMarksImportTests(TestCase):
         self.assertEqual(float(attempts.first().score), 94.0)
         attendance = Attendance.objects.get(student__roll_number="M1")
         self.assertEqual(attendance.status, Attendance.Status.PRESENT)
+
+
+class DSPCommunityImportTests(TestCase):
+    def setUp(self):
+        self.teacher_user = User.objects.create_user(
+            username="teacher1", password="pw", role=User.Role.TEACHER,
+            first_name="D.S.P.", last_name="Sir",
+        )
+        TeacherProfile.objects.create(user=self.teacher_user, employee_id="DSP-COMMUNITY-T")
+        classes = {
+            "M": Class.objects.create(name="11", section="M", academic_year="2025-26"),
+            "E": Class.objects.create(name="11", section="E", academic_year="2025-26"),
+        }
+        self.subjects = [
+            Subject.objects.create(name=name, code=code)
+            for name, code in (
+                ("Algebra & Logic", "DSP-ALG"),
+                ("Trigonometry & 2D Geometry", "DSP-TRIG"),
+                ("Vectors & 3D Geometry", "DSP-VECT"),
+                ("Calculus", "DSP-CALC"),
+                ("Probability & Statistics", "DSP-PROB"),
+                ("Full Syllabus Maths Mocks", "DSP-MOCK"),
+            )
+        ]
+        for username, name, batch in (
+            ("m1", "Shruti Sathe", "M"), ("m4", "Student Four", "M"),
+            ("m12", "Student Twelve", "M"), ("e49", "Aditi Agarkar", "E"),
+            ("e90", "Student Ninety", "E"), ("e23", "Student Twenty Three", "E"),
+        ):
+            user = User.objects.create_user(
+                username=username, password="pw", role=User.Role.STUDENT,
+                first_name=name.split()[0], last_name=" ".join(name.split()[1:]),
+            )
+            StudentProfile.objects.create(
+                user=user, roll_number=username.upper(), batch="Morning Batch" if batch == "M" else "Evening Batch",
+                student_class=classes[batch],
+            )
+
+    def test_community_import_is_idempotent_and_writes_resource_files(self):
+        with TemporaryDirectory() as media_dir:
+            with override_settings(MEDIA_ROOT=media_dir):
+                call_command("import_dsp_community", stdout=StringIO())
+                call_command("import_dsp_community", stdout=StringIO())
+
+                self.assertEqual(Notice.objects.count(), 8)
+                self.assertEqual(Resource.objects.count(), 12)
+                self.assertEqual(DoubtThread.objects.count(), 6)
+                self.assertEqual(DoubtReply.objects.count(), 6)
+                self.assertEqual(
+                    DoubtThread.objects.filter(status=DoubtThread.Status.RESOLVED).count(), 4
+                )
+                self.assertEqual(
+                    DoubtThread.objects.filter(status=DoubtThread.Status.OPEN).count(), 2
+                )
+                self.assertTrue(all(
+                    (Path(media_dir) / resource.file.name).is_file()
+                    for resource in Resource.objects.all()
+                ))
+                self.assertEqual(
+                    Resource.objects.values_list("file", flat=True).distinct().count(), 6
+                )
 
 
 class AttendanceWorkflowTests(TestCase):

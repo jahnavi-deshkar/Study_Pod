@@ -1,0 +1,15 @@
+DSP Academy | Mathematical Logic Quick Notes
+
+Propositions and connectives
+ p  q | p AND q | p OR q | p -> q | p <-> q
+ T  T |    T    |   T    |    T   |     T
+ T  F |    F    |   T    |    F   |     F
+ F  T |    F    |   T    |    T   |     F
+ F  F |    F    |   F    |    T   |     T
+
+Implication is false only when its premise is true and conclusion false.
+Negation of an implication: not(p -> q) = p AND not(q).
+De Morgan: not(p AND q) = not(p) OR not(q); not(p OR q) = not(p) AND not(q).
+A tautology is true in every row; a contradiction is false in every row.
+For a compound proposition, build one column per sub-expression and evaluate
+from the innermost parentheses outward.

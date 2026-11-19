@@ -1,0 +1,13 @@
+DSP Academy | Vectors and 3D Geometry
+
+For vectors a=(a1,a2,a3), b=(b1,b2,b3):
+a dot b = a1*b1 + a2*b2 + a3*b3
+|a cross b| = |a||b| sin(theta); a dot b = |a||b| cos(theta).
+
+Line through r0 with direction d: r = r0 + t d.
+Plane through (x0,y0,z0) with normal (A,B,C):
+A(x-x0) + B(y-y0) + C(z-z0) = 0.
+Angle theta between a line (direction d) and a plane (normal n):
+sin(theta) = |d dot n| / (|d||n|), with 0 <= theta <= 90 degrees.
+Distance from (x1,y1,z1) to Ax+By+Cz+D=0 is
+|Ax1+By1+Cz1+D| / sqrt(A^2+B^2+C^2).

@@ -5,6 +5,7 @@ import importlib.util
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest import skipUnless
+from unittest.mock import patch
 import zipfile
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -246,6 +247,137 @@ class DSPCommunityImportTests(TestCase):
                 self.assertEqual(
                     Resource.objects.values_list("file", flat=True).distinct().count(), 6
                 )
+
+
+class DSPRecruiterPortalSmokeTests(TestCase):
+    resource_path = "resources/Calculus_Integration_Standard_Formulae.txt"
+
+    def setUp(self):
+        self.teacher_user = User.objects.create_user(
+            username="teacher1", password="password123", role=User.Role.TEACHER,
+            first_name="D.S.P.", last_name="Sir",
+        )
+        self.teacher = TeacherProfile.objects.create(
+            user=self.teacher_user, employee_id="DSP-SMOKE-T", department="Mathematics"
+        )
+        self.morning = Class.objects.create(name="11", section="M", academic_year="2025-26")
+        self.evening = Class.objects.create(name="11", section="E", academic_year="2025-26")
+        self.subject = Subject.objects.create(name="Calculus", code="DSP-SMOKE-CALC")
+        for student_class in (self.morning, self.evening):
+            TeachingAssignment.objects.create(
+                teacher=self.teacher, student_class=student_class, subject=self.subject
+            )
+            Timetable.objects.create(
+                student_class=student_class, subject=self.subject, teacher=self.teacher,
+                day_of_week=Timetable.DayOfWeek.MONDAY,
+                start_time="07:30" if student_class == self.morning else "17:30",
+                end_time="09:30" if student_class == self.morning else "19:30",
+            )
+            Notice.objects.create(
+                teacher=self.teacher, student_class=student_class,
+                title=f"{student_class.section} batch weekly update", content="Check the current test schedule.",
+            )
+
+        self.parent_user = User.objects.create_user(
+            username="parent1", password="password123", role=User.Role.PARENT,
+            first_name="Rajesh", last_name="Sathe",
+        )
+        self.parent = ParentProfile.objects.create(user=self.parent_user)
+        self.other_parent_user = User.objects.create_user(
+            username="parent_e49", password="password123", role=User.Role.PARENT,
+            first_name="Suresh", last_name="Agarkar",
+        )
+        self.other_parent = ParentProfile.objects.create(user=self.other_parent_user)
+        self.m1 = self._student("m1", "Shruti", "Sathe", "M1", self.morning, self.parent)
+        self.m8 = self._student("m8", "Gaurav", "Sathe", "M8", self.morning, self.parent)
+        self.e49 = self._student("e49", "Aditi", "Agarkar", "E49", self.evening, self.other_parent)
+
+        self.resource = Resource.objects.create(
+            title="Calculus integration formulae", description="Standard revision formulas.",
+            teacher=self.teacher, student_class=self.morning, subject=self.subject,
+            file=self.resource_path,
+        )
+        self.thread = DoubtThread.objects.create(
+            title="Question about a definite integral", content="How should I choose a substitution?",
+            student=self.m1, student_class=self.morning, subject=self.subject,
+            is_public=True, status=DoubtThread.Status.OPEN,
+        )
+
+    @staticmethod
+    def _student(username, first_name, last_name, roll, student_class, parent):
+        user = User.objects.create_user(
+            username=username, password="student123", role=User.Role.STUDENT,
+            first_name=first_name, last_name=last_name,
+        )
+        return StudentProfile.objects.create(
+            user=user, roll_number=roll, batch="Morning Batch" if roll.startswith("M") else "Evening Batch",
+            student_class=student_class, parent=parent,
+        )
+
+    def assert_pages_ok(self, paths):
+        for path in paths:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200, f"{path} returned {response.status_code}")
+
+    def test_teacher_portal_routes_and_resource_pages_survive_vector_store_failure(self):
+        self.client.force_login(self.teacher_user)
+        routes = (
+            reverse("dashboard"), reverse("teacher_analytics"), reverse("teacher_timetable"),
+            reverse("test_management"), reverse("notices"), reverse("resource_list"),
+            reverse("doubt_threads"), reverse("teacher_resource_detail", args=[self.resource.pk]),
+        )
+        with patch(
+            "ai_suggestions.services.vector_store.StudyPodVectorStore",
+            side_effect=OSError("Hugging Face is offline"),
+        ):
+            self.assert_pages_ok(routes)
+
+    def test_student_portal_routes_and_resource_download(self):
+        student_user = self.m1.user
+        self.client.force_login(student_user)
+        self.assert_pages_ok((
+            reverse("dashboard"), reverse("student_analytics"), reverse("student_timetable"),
+            reverse("notices"), reverse("resource_list"), reverse("doubt_threads"),
+            reverse("student_resource_detail", args=[self.resource.pk]),
+        ))
+        with self.resource.file.open("rb") as study_file:
+            self.assertIn(b"Integration by parts", study_file.read())
+
+    def test_parent_read_only_routes_and_multi_child_selection(self):
+        self.client.force_login(self.parent_user)
+        self.assert_pages_ok((
+            reverse("dashboard"), reverse("notices"), reverse("resource_list"),
+            reverse("doubt_threads"),
+        ))
+        progress = self.client.get(reverse("parent_analytics"), {"student_id": self.m8.pk})
+        timetable = self.client.get(reverse("parent_timetable"), {"student_id": self.m8.pk})
+        self.assertEqual(progress.status_code, 200)
+        self.assertEqual(timetable.status_code, 200)
+        self.assertEqual(progress.context["selected_child"].pk, self.m8.pk)
+        self.assertEqual(timetable.context["selected_child"].pk, self.m8.pk)
+        self.assertFalse(self.client.get(reverse("doubt_threads")).context["can_create_thread"])
+        with self.resource.file.open("rb") as study_file:
+            self.assertTrue(study_file.read())
+
+
+class DSPDemoOrchestratorTests(TestCase):
+    @patch("academics.management.commands.setup_dsp_demo.call_command")
+    def test_setup_command_runs_all_stages_in_order_and_forwards_data_dir(self, mocked_call):
+        output = StringIO()
+        call_command("setup_dsp_demo", data_dir="fixture-workbooks", stdout=output)
+
+        self.assertEqual(
+            [call.args[0] for call in mocked_call.call_args_list],
+            ["import_dsp_roster", "import_dsp_marks", "import_dsp_community"],
+        )
+        self.assertTrue(all(
+            call.kwargs["data_dir"] == "fixture-workbooks"
+            for call in mocked_call.call_args_list[:2]
+        ))
+        self.assertNotIn("data_dir", mocked_call.call_args_list[2].kwargs)
+        self.assertIn("Stage 1/3", output.getvalue())
+        self.assertIn("Stage 3/3", output.getvalue())
 
 
 class AttendanceWorkflowTests(TestCase):

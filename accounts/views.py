@@ -66,6 +66,16 @@ def logout_view(request):
     return redirect("login")
 
 
+def local_portal(request):
+    """Open the role portal entry point, clearing an active admin session first."""
+    if request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser):
+        logout(request)
+        return redirect("login")
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    return redirect("login")
+
+
 def dashboard(request):
     if not request.user.is_authenticated:
         return redirect("login")

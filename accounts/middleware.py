@@ -15,11 +15,12 @@ class StaffPortalIsolationMiddleware:
         if user and user.is_authenticated and (user.is_staff or user.is_superuser):
             path = request.path_info
             is_admin_request = path == "/admin" or path.startswith(self.admin_prefix)
+            is_local_portal_entry = path.rstrip("/") == "/local"
             is_static_request = any(
                 prefix and path.startswith(prefix)
                 for prefix in (settings.STATIC_URL, settings.MEDIA_URL)
             )
-            if not is_admin_request and not is_static_request:
+            if not is_admin_request and not is_local_portal_entry and not is_static_request:
                 return redirect(self.admin_prefix)
 
         return self.get_response(request)

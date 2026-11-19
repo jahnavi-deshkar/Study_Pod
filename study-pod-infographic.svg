@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1910" viewBox="0 0 1200 1910" role="img" aria-labelledby="title desc">
 <title id="title">Study_Pod — How the portal works</title>
 <desc id="desc">A vertical infographic showing teacher, student, and parent access to the Study_Pod school portal, academic services and assessments, plus a separate AI resource indexing and study support flow.</desc>
 <defs>
@@ -15,7 +15,7 @@
 <path d="M1096 0h104v104z" fill="#A9501C"/>
 <text x="74" y="62" class="eyebrow" fill="#F3ECDE" opacity=".78">A SCHOOL PORTAL, EXPLAINED</text>
 <text x="70" y="151" class="title" fill="#F3ECDE">STUDY_POD</text>
-<text x="74" y="196" class="subtitle" fill="#F3ECDE">One connected portal for school workflows</text>
+<text x="74" y="196" class="subtitle" fill="#F3ECDE">Django school portal for teachers, students and parents</text>
 <rect x="74" y="229" width="66" height="4" rx="2" fill="#A9501C"/>
 <text x="157" y="237" class="small" fill="#F3ECDE" opacity=".85">TEACHERS  ·  STUDENTS  ·  PARENTS</text>
 <!-- actors / portal entry -->
@@ -109,13 +109,26 @@
 <rect x="79" y="1361" width="1034" height="30" rx="7" fill="#F3ECDE"/>
 <text x="96" y="1381" class="tiny"><tspan font-weight="700">OPTIONAL:</tspan> Web search can support selected AI requests.</text>
 <text x="1090" y="1381" text-anchor="end" class="tiny" opacity=".7">AI features depend on configured services.</text>
+<!-- project snapshot -->
+<text x="72" y="1463" class="section">PROJECT SNAPSHOT</text>
+<rect x="72" y="1481" width="1056" height="43" rx="9" fill="#183451"/><rect x="72" y="1481" width="8" height="43" rx="4" fill="#A9501C"/><text x="96" y="1508" class="body" font-weight="700" fill="#F3ECDE">The full suite passes: 58 tests, 0 failures, 0 errors.</text>
+<text x="72" y="1552" class="label">DATABASE TOTALS</text>
+<text x="72" y="1575" class="small">Including records that were already present</text>
+<rect x="72" y="1592" width="1056" height="111" rx="12" fill="#FFFCF6" stroke="#183451" stroke-width="2"/>
+<line x1="600" y1="1607" x2="600" y2="1686" stroke="#183451" opacity=".2"/>
+<text x="96" y="1624" class="small">3 classes · 8 subjects · 181 students · 3 parents</text>
+<text x="96" y="1650" class="small">12 timetable slots · 60 published assessments</text>
+<text x="96" y="1676" class="small">5,187 evaluated attempts · 5,403 attendance records</text>
+<text x="626" y="1624" class="small">10 notices · 16 study resources</text>
+<text x="626" y="1650" class="small">7 doubt threads · 6 replies</text>
+
 <!-- footer -->
-<text x="72" y="1463" class="section">BUILT FOR EVERYDAY SCHOOL WORK</text>
-<line x1="72" y1="1485" x2="1128" y2="1485" stroke="#183451" stroke-width="1.5" opacity=".25"/>
-<text x="74" y="1521" class="label">TECH</text><text x="74" y="1545" class="small">Python · Django · SQLite*</text>
-<line x1="400" y1="1500" x2="400" y2="1560" stroke="#183451" opacity=".25"/>
-<text x="430" y="1521" class="label">AI SUPPORT</text><text x="430" y="1545" class="small">ChromaDB · Groq · web search</text>
-<rect x="825" y="1501" width="303" height="65" rx="9" fill="#A9501C"/>
-<text x="847" y="1527" class="label" fill="#F3ECDE">ONE PORTAL</text><text x="847" y="1548" class="small" fill="#F3ECDE">School services + study support</text>
-<text x="74" y="1582" class="tiny" opacity=".67">*SQLite is the local default. Uploaded files and the local AI index are stored separately.</text>
+<text x="72" y="1735" class="section">BUILT FOR EVERYDAY SCHOOL WORK</text>
+<line x1="72" y1="1757" x2="1128" y2="1757" stroke="#183451" stroke-width="1.5" opacity=".25"/>
+<text x="74" y="1793" class="label">TECH</text><text x="74" y="1817" class="small">Python · Django · SQLite*</text>
+<line x1="400" y1="1772" x2="400" y2="1832" stroke="#183451" opacity=".25"/>
+<text x="430" y="1793" class="label">AI SUPPORT</text><text x="430" y="1817" class="small">ChromaDB · Groq · web search</text>
+<rect x="825" y="1773" width="303" height="65" rx="9" fill="#A9501C"/>
+<text x="847" y="1799" class="label" fill="#F3ECDE">ONE PORTAL</text><text x="847" y="1820" class="small" fill="#F3ECDE">School services + study support</text>
+<text x="74" y="1890" class="tiny" opacity=".67">*SQLite is the local default. Uploaded files and the local AI index are stored separately.</text>
 </svg>

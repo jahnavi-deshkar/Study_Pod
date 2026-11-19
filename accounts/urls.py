@@ -3,6 +3,7 @@ from . import views
 
 
 urlpatterns = [
+    path("local/", views.local_portal, name="local_portal"),
     path("login/", views.login_view, name="login"),
     # Compatibility route for Django's historical login_required default.
     path("accounts/login/", views.login_view, name="accounts_login_legacy"),

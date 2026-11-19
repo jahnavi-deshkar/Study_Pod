@@ -1,0 +1,15 @@
+DSP Academy | Mathematics Mock-Test Strategy
+
+Use the first pass to secure short, familiar questions. Mark lengthy algebra
+and return on a second pass. Keep rough work aligned with question numbers so
+answers can be checked quickly. Reserve the final minutes for unanswered
+items, sign checks, units, and transferring responses to the required format.
+
+Fast checks
+* Substitute a proposed root into the original equation.
+* Use parity and domain restrictions before expanding expressions.
+* In determinants, look for a common factor or equal rows before expansion.
+* In probability, count the sample space once and avoid double-counting.
+* In calculus, differentiate an antiderivative to check an integral.
+Follow the official instructions for the specific mock; do not assume a
+shortcut replaces a required derivation in board-style answers.

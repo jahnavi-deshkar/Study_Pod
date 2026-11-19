@@ -1,0 +1,16 @@
+DSP Academy | Calculus Formulae and Methods
+
+Differentiation
+d(x^n)/dx = n*x^(n-1); d(sin x)/dx = cos x; d(cos x)/dx = -sin x.
+d(e^x)/dx = e^x; d(ln x)/dx = 1/x.
+Product rule: (uv)' = u'v + uv'. Quotient rule: (u/v)'=(u'v-uv')/v^2.
+Chain rule: d[f(g(x))]/dx = f'(g(x))*g'(x).
+
+Standard integrals
+integral x^n dx = x^(n+1)/(n+1) + C (n != -1).
+integral dx/x = ln|x| + C; integral e^x dx = e^x + C.
+integral sin x dx = -cos x + C; integral cos x dx = sin x + C.
+integral dx/(a^2+x^2) = (1/a) atan(x/a) + C (a>0).
+Integration by parts: integral u dv = uv - integral v du.
+For substitution, set u=g(x), replace dx and all limits together.
+Fundamental theorem: integral_a^b f(x)dx = F(b)-F(a), where F'=f.
